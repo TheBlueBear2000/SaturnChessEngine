@@ -1,6 +1,34 @@
+from math import log2
+from enum import Enum
+
 CHANNEL_ORDER = ["R", "N", "B", "Q", "K"]
 CHANNEL_VALUES = [1, 5, 3, 3, 10]  # Includes pawn at start, excludes king at end
-from math import log2
+
+
+class File(Enum):
+    A = 0
+    B = 1
+    C = 2
+    D = 3
+    E = 4
+    F = 5
+    G = 6
+    H = 7
+
+
+class Position:
+    def __init__(self, file, rank):
+        self.file = File(ord(file.lower()) - 97)
+        self.rank = int(rank) - 1
+
+    def isBishopAligned(self, otherPos):
+        return (
+            self.rank + self.file.value == otherPos.rank + otherPos.file.value
+            or self.rank - self.file.value == otherPos.rank - otherPos.file.value
+        )
+
+    def isRookAligned(self, otherPos):
+        return otherPos.file == self.file or otherPos.rank == self.rank
 
 
 class Board:
@@ -19,46 +47,55 @@ class Board:
             0b0000100000000000000000000000000000000000000000000000000000000000,  # Black queen
             0b0001000000000000000000000000000000000000000000000000000000000000,  # Black king
         ]
-        self.whiteCanCastle, self.blackCanCastle = False, False
+        (
+            self.whiteCanLongCastle,
+            self.whiteCanShortCastle,
+            self.blackCanLongCastle,
+            self.blackCanShortCastle,
+        ) = (True, True, True, True)
+
         self.whiteScore, self.blackScore = 0, 0
 
-    def identifyChannelFromMove(self, move: str, whiteMove: bool):
-        if move[1].isnumeric():  # For pawns
-            return 6 * int(whiteMove), move
-        piece = move.pop(0)
-        return (CHANNEL_ORDER.index(piece) + 1) + (6 * int(whiteMove)), move
+        self.previousMovePawnPushedFile = None
 
-    def squareToInt(self, square: str):
+    def identifyChannelFromPos(self, pos: Position):
+        mask = self.positionToMask(pos)
+        for c, channel in enumerate(self.state):
+            if mask & channel:
+                return c
+
+    def positionToInt(self, position: Position):
         # Assumes a form of letter number, such as a3, c7, etc
-        return (ord(square[0].lower()) - 97) + (8 * (int(square[1]) - 1))
+        return (position.file.value) + (8 * position.rank)
 
-    def intToSquare(self, position: int):
-        return chr((position % 8) + 97) + str(position // 8)
+    def intToPosition(self, position: int):
+        return Position(chr((position % 8) + 97), position // 8)
 
     def getMaskPositions(self, mask: int):
         positions = []
         for i in range(64):
             testMask = 1 << i
             if testMask & mask:
-                positions.append(self.intToSquare(i))
+                positions.append(self.intToPosition(i))
+        return positions
 
-    def positionMask(self, square: str):
-        return 1 << self.squareToInt(square)
+    def positionToMask(self, position: Position):
+        return 1 << self.positionToInt(position)
 
-    def movePiece(self, startPos: str, endPos: str, channel: int):
-        startMask = self.positionMask(startPos)
-        endMask = self.positionMask(endPos)
+    def movePiece(self, startPos: Position, endPos: Position, channel: int):
+        startMask = self.positionToMask(startPos)
+        endMask = self.positionToMask(endPos)
         self.state[channel] &= ~startMask  # Remove piece from start pos
         self.state[channel] |= endMask  # Add piece back to end pos
 
     def getPieceValue(self, channel: int):
         modular_channel = channel % 6
         if modular_channel == 5:
-            raise Exception("Cannot get king value")
+            raise Exception("King has no value")
         return CHANNEL_VALUES[modular_channel]
 
-    def takePiece(self, takePos: str, whiteMove: bool):
-        takeMask = self.positionMask(takePos)
+    def takePiece(self, takePos: Position, whiteMove: bool):
+        takeMask = self.positionToMask(takePos)
         for c, channel in enumerate(self.state):
             if takeMask & channel:
                 self.state[c] &= ~takeMask
@@ -73,40 +110,15 @@ class Board:
         )
 
     def stripMove(self, move: str, whiteMove: bool):
+        startPos = Position(move[0], move[1])
+        endPos = Position(move[2], move[3])
 
-        # Remove check and checkmate notation
-        move = move.strip("#")
-        move = move.strip("+")
-
-        # Flag and remove enpassant notation
-        enpassant = move.endswith("e.p.")
-        move = move.strip("e.p.")
-        move = move.strip()  # incase of trailing whitespace after e.p. removal
-
-        # Flag and remove capture notation
-        capture = "x" in move
-        move.replace("x", "-")
-
-        # Flag and remove promotion notation
-        move.split("=")
         promoteTo = ""
-        if len(move) > 1:
-            promoteTo = move[1]
-        move = move[0]
+        if len(move) == 5:
+            promoteTo = move[4].upper()
 
-        longCastle = move.upper() == "O-O-O"
-        shortCastle = move.upper() == "O-O"
-
-        if longCastle or shortCastle:
-            return "", "", 0, enpassant, capture, promoteTo, longCastle, shortCastle
-
-        # If move is not castling, it follows standard form
         # Exctract moved piece channel
-        pieceChannel, move = self.identifyChannelFromMove(move, whiteMove)
-
-        # Split move into beginning and end positions
-        positions = move.split("-")  # Split into beginning and end pos
-        startPos, endPos = positions[0], positions[1]
+        pieceChannel = self.identifyChannelFromPos(startPos)
 
         # Validate position form
         if not (
@@ -124,52 +136,90 @@ class Board:
             startPos,
             endPos,
             pieceChannel,
-            enpassant,
-            capture,
             promoteTo,
-            longCastle,
-            shortCastle,
         )
 
-    def get_board(self):
-        return self.state
+    def getBoard(self):
+        return self.state, {self.whiteCanLongCastle}
 
-    def update(self, move: str, whiteMove: bool):  # Assumes all moves are legal
+    def getParams(self):
+        return {
+            "castling_rights": (
+                self.whiteCanLongCastle,
+                self.whiteCanShortCastle,
+                self.blackCanLongCastle,
+                self.blackCanShortCastle,
+            ),
+            "scores": (
+                self.whiteScore,
+                self.blackScore,
+            ),
+            "previousMovePawnPushedFile": self.previousMovePawnPushedFile,
+        }
+
+    def setParams(self, params):
+        (
+            self.whiteCanLongCastle,
+            self.whiteCanShortCastle,
+            self.blackCanLongCastle,
+            self.blackCanShortCastle,
+        ) = params["castling_rights"]
+        self.whiteScore, self.blackScore = params["scores"]
+        self.previousMovePawnPushedFile = params["previousMovePawnPushedFile"]
+
+    def getBoardCopy(self):
+        return [channel for channel in self.state]
+
+    def update(
+        self, move: str, whiteMove: bool, realUpdate: bool = True
+    ):  # Assumes all moves are legal
         (
             startPos,
             endPos,
             pieceChannel,
-            enpassant,
-            capture,
             promoteTo,
-            longCastle,
-            shortCastle,
         ) = self.stripMove(move, whiteMove)
 
-        # Castling
-        if longCastle:  # Long castle
-            if whiteMove:
-                self.movePiece("e1", "c1", 5)  # Move king
-                self.movePiece("a1", "d1", 1)  # Move rook
-            else:
-                self.movePiece("e8", "c8", 5)  # Move king
-                self.movePiece("a8", "d8", 1)  # Move rook
-            return
-        elif shortCastle:  # Short castle
-            if whiteMove:
-                self.movePiece("e1", "g1", 5)  # Move king
-                self.movePiece("h1", "f1", 1)  # Move rook
-            else:
-                self.movePiece("e8", "c8", 5)  # Move king
-                self.movePiece("a8", "d8", 1)  # Move rook
-            return
+        if not realUpdate:
+            backupBoard = self.getBoardCopy()
+            backupParams = self.getParams()
+
+        # Castling - move rooks first
+        if pieceChannel == 5:  # White Castle
+            if self.whiteCanLongCastle and endPos.file == File.C:
+                self.movePiece(Position("A", 1), Position("D", 1), 1)
+                self.whiteCanLongCastle, self.whiteCanShortCastle = False
+            if self.whiteCanShortCastle and endPos.file == File.G:
+                self.movePiece(Position("H", 1), Position("F", 1), 1)
+                self.whiteCanLongCastle, self.whiteCanShortCastle = False
+        elif pieceChannel == 11:  # Black Castle
+            if self.blackCanLongCastle and endPos.file == File.C:
+                self.movePiece(Position("A", 8), Position("D", 8), 7)
+                self.blackCanLongCastle, self.blackCanShortCastle = False
+            if self.blackCanShortCastle and endPos.file == File.G:
+                self.movePiece(Position("H", 8), Position("F", 8), 7)
+                self.blackCanLongCastle, self.blackCanShortCastle = False
+
+        # Invalidate castles once rooks are moved
+        if pieceChannel == 1:
+            if startPos == Position("A", 1):
+                self.whiteCanLongCastle = False
+            elif startPos == Position("H", 1):
+                self.whiteCanShortCastle = False
+        elif pieceChannel == 7:
+            if startPos == Position("A", 8):
+                self.blackCanLongCastle = False
+            elif startPos == Position("H", 8):
+                self.blackCanShortCastle = False
 
         # Capture
-        if capture:
-            if enpassant:
-                takePos = (
-                    endPos[0] + startPos[1]
-                )  # Taken piece is always column of new pos but row of old
+        if self.identifyChannelFromPos(endPos) != None:
+            # En Passant derivation check
+            if self.previousMovePawnPushedFile == endPos.file and (
+                (whiteMove and pieceChannel == 0 and endPos.rank == 6)
+                or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 3)
+            ):
+                takePos = Position(str(endPos.file.name), startPos.rank)
                 self.takePiece(takePos, whiteMove)
             else:
                 self.takePiece(endPos, whiteMove)
@@ -179,25 +229,40 @@ class Board:
 
         # Promotion
         if pieceChannel in [0, 6] and promoteTo != "":
-            self.state[channel] &= ~self.positionMask(endPos)  # Delete pawn
+            self.state[channel] &= ~self.positionToMask(endPos)  # Delete pawn
             self.state[
                 (CHANNEL_ORDER.index(piece) + 1)
                 + (6 * int(whiteMove))  # Identify channel of new piece
-            ] |= self.positionMask(
+            ] |= self.positionToMask(
                 endPos
             )  # Add new piece by channel
 
-    def isCheck(self, isWhiteCheck, board=self.state):
+        if realUpdate:
+            # Expose double pushed pawns for enpassant
+            if pieceChannel in [0, 6] and abs(startPos.rank - endPos.rank) == 2:
+                self.previousMovePawnPushedFile = endPos.file
+            else:
+                self.previousMovePawnPushedFile = None
+            # No need to return anything since board is updated
+
+        else:  # If update is not real, return new board and params and reset to old one
+            newBoard = self.getBoardCopy()
+            newParams = self.getParams()
+            self.state = backupBoard
+            self.setParams(backupParams)
+            return newBoard, newParams
+
+    def isCheck(self, pos: Position, isWhiteCheck: bool, board=self.state):
         if isWhiteCheck:
             attackingPieces = board[6:]
             # Use the fact that there is 1 king and so location must be power of two to identify digit position in mask
-            kingPos = intToSquare(log2(board[5]))
+            kingPos = self.intToPosition(log2(board[5]))
         else:
             attackingPieces = board[:6]
-            kingPos = intToSquare(log2(board[11]))
-        
-        for pawn in getMaskPositions(attackingPieces[0]):
-            
+            kingPos = self.intToPosition(log2(board[11]))
+
+        for pawn in self.getMaskPositions(attackingPieces[0]):
+            {}
 
     def moveLegal(move: str, whiteMove: bool):  # Checks move legality
         (
