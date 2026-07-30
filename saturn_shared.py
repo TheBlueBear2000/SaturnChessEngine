@@ -1,4 +1,3 @@
-from math import log2
 from enum import Enum
 
 CHANNEL_ORDER = ["R", "N", "B", "Q", "K"]
@@ -396,7 +395,7 @@ class Board:
         else:
             pieceChannel = 6 * int(
                 not whiteMove
-            )  # Will be 0 if white move (therefore white piece), or 6 if black move (therefore black piece)
+            )  # Will be 0 if white move (therefore finding white pieces), or 6 if black move (therefore finding black pieces)
         if pieceChannel < 6:
             checkingWhite = True
             attackingPieces = board[6:]
@@ -447,7 +446,7 @@ class Board:
         # King
         king = self.getMaskPositions(attackingPieces[5])[0]
         if self.kingCanMoveToPos(king, pos):
-            attackingShortlist.append(queen)
+            attackingShortlist.append(king)
             if quitAtOne:
                 return True
 
@@ -478,7 +477,11 @@ class Board:
         if not movingOwnPiece:
             return False, f"Start position {str(startPos)} does not contain own piece"
 
-        # TODO: Account for discovered checks
+        if self.posContainsOwnPiece(endPos, whiteMove):
+            return (
+                False,
+                f"Cannot move to {endPos} as it is already occupied by own piece",
+            )
 
         # PAWNS
         if pieceChannel == 0:  # White pawn
@@ -594,24 +597,74 @@ class Board:
                             and self.whiteCanLongCastle
                             and startPos == Position("E", 1)
                             and endPos == Position("C", 1)
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("B", 1), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("C", 1), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("D", 1), whiteMove, anyPiece=True
+                                )
+                            )
                         )
                         or (  # White short castle
                             pieceChannel == 5
                             and self.whiteCanShortCastle
                             and startPos == Position("E", 1)
                             and endPos == Position("G", 1)
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("F", 1), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("G", 1), whiteMove, anyPiece=True
+                                )
+                            )
                         )
                         or (  # Black long castle
                             pieceChannel == 11
                             and self.blackCanLongCastle
                             and startPos == Position("E", 8)
                             and endPos == Position("C", 8)
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("B", 8), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("C", 8), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("D", 8), whiteMove, anyPiece=True
+                                )
+                            )
                         )
                         or (  # Black short castle
                             pieceChannel == 11
                             and self.blackCanShortCastle
                             and startPos == Position("E", 8)
                             and endPos == Position("G", 8)
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("F", 8), whiteMove, anyPiece=True
+                                )
+                            )
+                            and (
+                                not self.posContainsOwnPiece(
+                                    Position("G", 8), whiteMove, anyPiece=True
+                                )
+                            )
                         )
                     )
                 )
