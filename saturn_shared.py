@@ -26,18 +26,18 @@ class Position:
             self.rank = int(rank) - 1
 
     def __str__(self):
-        return f"{self.file.name}{self.rank}"
+        return f"{self.file.name}{self.rank + 1}"
 
-    def isBishopAligned(self, otherPos: Position):
+    def isBishopAligned(self, otherPos):
         return (
             self.rank + self.file.value == otherPos.rank + otherPos.file.value
             or self.rank - self.file.value == otherPos.rank - otherPos.file.value
         )
 
-    def isRookAligned(self, otherPos: Position):
+    def isRookAligned(self, otherPos):
         return otherPos.file == self.file or otherPos.rank == self.rank
 
-    def isKnightAligned(self, otherPos: Position):
+    def isKnightAligned(self, otherPos):
         return (
             not self.isRookAligned(
                 otherPos
@@ -47,7 +47,7 @@ class Position:
             == 3  # Check that manhatten distance is 3
         )
 
-    def isKingAligned(self, otherPos: Position):
+    def isKingAligned(self, otherPos):
         return (
             abs(self.rank - otherPos.rank) == 1
             or abs(self.file.value - otherPos.file.value) == 1
@@ -384,9 +384,12 @@ class Board:
         self,
         pos: Position,
         whiteMove: bool = None,
-        board=self.state,
+        board=None,
         quitAtOne: bool = False,
     ):
+        if board == None:
+            board = self.state
+
         attackingShortlist = []
         if whiteMove == None:
             pieceChannel = self.identifyChannelFromPos(pos)
