@@ -33,6 +33,8 @@ def translate(game: str):
         evals.append(float(we))
         evals.append(float(be))
 
+    print(f"Game: {raw_moves}")
+
     # Translate moves into server LAN by simulating game
     move_pattern = re.compile(
         r"""
@@ -53,6 +55,7 @@ def translate(game: str):
     whiteMove = True
     for m_i, move in enumerate(raw_moves):
         # First figure out move full LAN notation based on gamestate, then make move
+        print(f"\n\nMOVE: {move}, WHITE: {whiteMove}")
         (
             castling,
             piece,
@@ -62,6 +65,10 @@ def translate(game: str):
             promotion,
             checkOrMate,
         ) = move_pattern.match(move).groups()
+
+        capture = capture == "x"  # Turn capture into boolean
+
+        startPos = None
 
         if castling == "O-O-O":
             if whiteMove:
@@ -84,21 +91,38 @@ def translate(game: str):
                 possiblePieces = board.state[:6]
             else:
                 possiblePieces = board.state[6:]
-            pieceTypeMask = possiblePieces[PIECE_CHANNELS.index(piece)]
+            piece_channel = PIECE_CHANNELS.index(piece)
+            pieceTypeMask = possiblePieces[piece_channel]
             all_piece_positions = board.getMaskPositions(pieceTypeMask)
+            print(f"All piece positions: {[str(p) for p in all_piece_positions]}")
 
             # Filter by disambiguation
             positions = []
+            print(f"Disambiguation: {disambiguation}")
             for pos in all_piece_positions:
-                if disambiguation in str(pos):
+                if disambiguation in str(pos).lower():
                     positions.append(pos)
+            print(f"Filtered positions: {[str(p) for p in positions]}")
 
             # If there are still multiple candidates, check which can attack the square depending on type
             if len(positions) > 1:
-                attackers = board.posAttackedBy(endPos, whiteMove, board)
+                canSee = board.posAttackedBy(endPos, whiteMove, board, forTake=capture)
+                print(
+                    f"canSee: {[str(attacker) for attacker in canSee]}\nPositions: {[str(position) for position in positions]}\nEndPos: {str(endPos)}\nBoard State:"
+                )
+
+                print(board.render())
+                print(
+                    f"canSee type: {type(canSee[0])}, positions type: {type(positions[0])}"
+                )
                 for pos in positions:
-                    if pos in attackers:
+                    if pos in canSee:
                         startPos = pos
+
+                if startPos == None:
+                    raise Exception(
+                        f"Cannot find any piece to go to {endPos} in channel {piece_channel}"
+                    )
 
             elif len(positions) == 1:
                 startPos = positions[0]
@@ -108,9 +132,12 @@ def translate(game: str):
         if promotion == None:
             promotion = ""
 
+        if startPos == None:
+            raise Exception("Start piece still not found")
+
         # Carry out update
         translatedMove = f"{startPos}{endPos}{promotion.lower()}"
-        board.update(translatedMove, whiteMove)
+
         output.append(
             {
                 "board": board.getBoardCopy(),
@@ -119,6 +146,9 @@ def translate(game: str):
                 "evaluation": evals[m_i],
             }
         )
+
+        # Update board after recording previous position, so that each move corresponds to previous board state
+        board.update(translatedMove, whiteMove)
 
         whiteMove = not whiteMove  # Alternate after each move
 
