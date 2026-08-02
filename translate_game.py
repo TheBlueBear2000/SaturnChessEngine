@@ -1,5 +1,6 @@
+import server.SaturnChessEngine.saturn_shared as saturn_shared
+
 import re
-import saturn_shared
 
 PIECE_CHANNELS = [None, "R", "N", "B", "Q", "K"]
 

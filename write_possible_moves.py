@@ -1,10 +1,11 @@
-from saturn_shared import File, Position
+from server.SaturnChessEngine.saturn_shared import File, Position
+
 from json import dumps
 
 # Tool script to write all possible moves to a json file, which will
 # be used as lookup for the main output head of the neural net
 
-END_FILE = "allowed_moves.json"
+END_FILE = "server/SaturnChessEngine/allowed_moves.json"
 
 output = []
 totalPossibleMoves = 0

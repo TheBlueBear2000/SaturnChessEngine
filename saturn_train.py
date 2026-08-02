@@ -1,11 +1,10 @@
 print("Starting...")
 from datasets import load_dataset
-import translate_game
-from network import SaturnNetwork
-from util import mask_to_bitmap
-from saturn_shared import Board
-import json
+import server.SaturnChessEngine.translate_game as translate_game
+from server.SaturnChessEngine.network import SaturnNetwork
+from server.SaturnChessEngine.util import mask_to_bitmap
 
+import json
 import torch
 import torch.nn as nn
 
@@ -14,7 +13,7 @@ MSE = nn.MSELoss()
 
 ### LOAD MODEL ###
 print("Loading model...")
-with open("allowed_moves.json", "r") as file:
+with open("server/SaturnChessEngine/allowed_moves.json", "r") as file:
     allowed_moves = json.load(file)
 n_outputs = len(allowed_moves)  # Update to gather automatically from move loading
 model = SaturnNetwork(n_outputs)
@@ -96,6 +95,6 @@ print()  # Bypass carridge return of progress listing
 
 print(f"Training complete! Finished with final loss of {loss.item()}\nSaving...")
 
-torch.save(model.state_dict(), "saturn_weights.pth")
+torch.save(model.state_dict(), "server/SaturnChessEngine/saturn_weights.pth")
 
 print("Saved and done!")

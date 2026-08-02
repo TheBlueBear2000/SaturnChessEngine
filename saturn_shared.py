@@ -1,5 +1,6 @@
+from server.SaturnChessEngine.util import mask_to_bitmap
+
 from enum import Enum
-from util import mask_to_bitmap
 
 CHANNEL_ORDER = ["R", "N", "B", "Q", "K"]
 CHANNEL_VALUES = [1, 5, 3, 3, 10]  # Includes pawn at start, excludes king at end
@@ -89,6 +90,8 @@ class Board:
 
         self.previousMovePawnPushedFile = None
 
+        self.whiteMove = True
+
     def identifyChannelFromPos(self, pos: Position):
         mask = self.positionToMask(pos)
         for c, channel in enumerate(self.state):
@@ -125,10 +128,10 @@ class Board:
             raise Exception("King has no value")
         return CHANNEL_VALUES[modular_channel]
 
-    def posContainsOwnPiece(self, pos, whiteMove=True, anyPiece=False):
+    def posContainsOwnPiece(self, pos, anyPiece=False):
         if anyPiece:
             pieces = self.state
-        elif whiteMove:
+        elif self.whiteMove:
             pieces = self.state[:6]
         else:
             pieces = self.state[6:]
@@ -157,10 +160,10 @@ class Board:
         return image + "  abcdefgh"
 
     # Based on checking from the rook's position - make sure to check that final pos is clear of own-colored pieces
-    def rookCanMoveToPos(self, pos: Position, otherPos: Position, whiteMove: bool):
+    def rookCanMoveToPos(self, pos: Position, otherPos: Position):
         if pos.isRookAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos, whiteMove):
+            if self.posContainsOwnPiece(otherPos, self.whiteMove):
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -189,19 +192,19 @@ class Board:
                 return True
         return False
 
-    def knightCanMoveToPos(self, pos: Position, otherPos: Position, whiteMove: bool):
+    def knightCanMoveToPos(self, pos: Position, otherPos: Position):
         if pos.isKnightAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos, whiteMove):
+            if self.posContainsOwnPiece(otherPos, self.whiteMove):
                 return False
             # If squares are knight aligned and the final position is not occupied by own piece, knight can move there
             return True
         return False
 
-    def bishopCanMoveToPos(self, pos: Position, otherPos: Position, whiteMove: bool):
+    def bishopCanMoveToPos(self, pos: Position, otherPos: Position):
         if pos.isBishopAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos, whiteMove):
+            if self.posContainsOwnPiece(otherPos, self.whiteMove):
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -238,31 +241,31 @@ class Board:
         return False
 
     # DOES NOT ACCOUNT FOR CHECK
-    def kingCanMoveToPos(self, pos: Position, otherPos: Position, whiteMove: bool):
+    def kingCanMoveToPos(self, pos: Position, otherPos: Position):
         if pos.isKingAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos, whiteMove):
+            if self.posContainsOwnPiece(otherPos, self.whiteMove):
                 return False
             # Like knight, there is no need to check middling squares since king only moves one square at a time
             return True
         return False
 
-    def takePiece(self, takePos: Position, whiteMove: bool):
+    def takePiece(self, takePos: Position):
         takeMask = self.positionToMask(takePos)
         for c, channel in enumerate(self.state):
             if takeMask & channel:
                 self.state[c] &= ~takeMask
                 score = self.getPieceValue(c)
-                if whiteMove:
+                if self.whiteMove:
                     self.whiteScore += score
                 else:
                     self.blackScore += score
                 return
         raise Exception(
-            f"Move alledges to capture piece, but there is no piece to capture at {takePos}, whiteMove: {whiteMove}\n{self.render()}"
+            f"Move alledges to capture piece, but there is no piece to capture at {takePos}, whiteMove: {self.whiteMove}\n{self.render()}"
         )
 
-    def stripMove(self, move: str, whiteMove: bool):
+    def stripMove(self, move: str):
         move = move.lower()
         # Validate position form
         if not (
@@ -321,15 +324,15 @@ class Board:
     def getBoardCopy(self):
         return [channel for channel in self.state]
 
-    def update(
-        self, move: str, whiteMove: bool, realUpdate: bool = True
-    ):  # Assumes all moves are legal
+    def update(self, move: str, realUpdate: bool = True):  # Assumes all moves are legal
+        # print(f"\n\n\n\nMove: {move} White Move: {self.whiteMove}\n{self.render()}")
         (
             startPos,
             endPos,
             pieceChannel,
             promoteTo,
-        ) = self.stripMove(move, whiteMove)
+        ) = self.stripMove(move)
+        # print(f"channel: {pieceChannel}")
 
         if not realUpdate:
             backupBoard = self.getBoardCopy()
@@ -366,15 +369,15 @@ class Board:
 
         # Capture
         if self.identifyChannelFromPos(endPos) != None:
-            self.takePiece(endPos, whiteMove)
+            self.takePiece(endPos)
 
         # En Passant derivation check
         if self.previousMovePawnPushedFile == endPos.file and (
-            (whiteMove and pieceChannel == 0 and endPos.rank == 5)
-            or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 2)
+            (self.whiteMove and pieceChannel == 0 and endPos.rank == 5)
+            or ((not self.whiteMove) and pieceChannel == 6 and endPos.rank == 2)
         ):
             takePos = Position(endPos.file, startPos.rank, fromPositionParts=True)
-            self.takePiece(takePos, whiteMove)
+            self.takePiece(takePos)
 
         # Standard Move
         self.movePiece(startPos, endPos, pieceChannel)
@@ -384,7 +387,7 @@ class Board:
             self.state[pieceChannel] &= ~self.positionToMask(endPos)  # Delete pawn
             self.state[
                 (CHANNEL_ORDER.index(promoteTo) + 1)
-                + (6 * int(not whiteMove))  # Identify channel of new piece
+                + (6 * int(not self.whiteMove))  # Identify channel of new piece
             ] |= self.positionToMask(
                 endPos
             )  # Add new piece by channel
@@ -395,6 +398,7 @@ class Board:
                 self.previousMovePawnPushedFile = endPos.file
             else:
                 self.previousMovePawnPushedFile = None
+            self.whiteMove = not self.whiteMove  # Alternate move owner
             # No need to return anything since board is updated
 
         else:  # If update is not real, return new board and params and reset to old one
@@ -408,7 +412,7 @@ class Board:
     def posAttackedBy(
         self,
         pos: Position,
-        checkAttackedByWhite: bool = None,
+        checkingOwnPieces: bool = None,
         board=None,
         quitAtOne: bool = False,
         forTake: bool = True,
@@ -419,11 +423,14 @@ class Board:
             board = Board(board)
 
         attackingShortlist = []
-        if checkAttackedByWhite == None:
+        if checkingOwnPieces == None:
             pieceChannel = board.identifyChannelFromPos(pos)
         else:
             pieceChannel = 6 * int(
-                not checkAttackedByWhite
+                not (
+                    (checkingOwnPieces and board.whiteMove)
+                    or not (checkingOwnPieces or board.whiteMove)
+                )
             )  # Will be 0 if white move (therefore finding white pieces), or 6 if black move (therefore finding black pieces)
         if pieceChannel < 6:
             checkingWhite = True
@@ -469,37 +476,37 @@ class Board:
 
         # Rooks
         for rook in board.getMaskPositions(attackingPieces[1]):
-            if board.rookCanMoveToPos(rook, pos, checkAttackedByWhite):
+            if board.rookCanMoveToPos(rook, pos):
                 attackingShortlist.append(rook)
                 if quitAtOne:
                     return True
 
         # Knights
         for knight in board.getMaskPositions(attackingPieces[2]):
-            if board.knightCanMoveToPos(knight, pos, checkAttackedByWhite):
+            if board.knightCanMoveToPos(knight, pos):
                 attackingShortlist.append(knight)
                 if quitAtOne:
                     return True
 
         # Bishops
         for bishop in board.getMaskPositions(attackingPieces[3]):
-            if board.bishopCanMoveToPos(bishop, pos, checkAttackedByWhite):
+            if board.bishopCanMoveToPos(bishop, pos):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
                     return True
 
         # Queens
         for queen in board.getMaskPositions(attackingPieces[4]):
-            if board.bishopCanMoveToPos(
-                queen, pos, checkAttackedByWhite
-            ) or board.rookCanMoveToPos(queen, pos, checkAttackedByWhite):
+            if board.bishopCanMoveToPos(queen, pos) or board.rookCanMoveToPos(
+                queen, pos
+            ):
                 attackingShortlist.append(queen)
                 if quitAtOne:
                     return True
 
         # King
         king = board.getMaskPositions(attackingPieces[5])[0]
-        if board.kingCanMoveToPos(king, pos, checkAttackedByWhite):
+        if board.kingCanMoveToPos(king, pos):
             attackingShortlist.append(king)
             if quitAtOne:
                 return True
@@ -509,17 +516,17 @@ class Board:
         return attackingShortlist
 
     # Checks move legality, returns boolean + error message
-    def moveLegal(self, move: str, whiteMove: bool):
+    def moveLegal(self, move: str):
         (
             startPos,
             endPos,
             pieceChannel,
             promoteTo,
-        ) = self.stripMove(move, whiteMove)
+        ) = self.stripMove(move)
 
         # Check that startPos contains own piece
         movingOwnPiece = False
-        if whiteMove:
+        if self.whiteMove:
             ownPieces = self.state[:6]
         else:
             ownPieces = self.state[6:]
@@ -531,7 +538,8 @@ class Board:
         if not movingOwnPiece:
             return False, f"Start position {str(startPos)} does not contain own piece"
 
-        if self.posContainsOwnPiece(endPos, whiteMove):
+        # Check that end pos doesnt contain own piece
+        if self.posContainsOwnPiece(endPos):
             return (
                 False,
                 f"Cannot move to {endPos} as it is already occupied by own piece",
@@ -614,34 +622,34 @@ class Board:
 
         # ROOKS
         elif pieceChannel in [1, 7]:
-            if not self.rookCanMoveToPos(startPos, endPos, whiteMove):
+            if not self.rookCanMoveToPos(startPos, endPos):
                 return False, f"Rook cannot move to {endPos}"
 
         # KNIGHTS
         elif pieceChannel in [2, 8]:
-            if not self.knightCanMoveToPos(startPos, endPos, whiteMove):
+            if not self.knightCanMoveToPos(startPos, endPos):
                 return False, f"Knight cannot move to {endPos}"
 
         # BISHOPS
         elif pieceChannel in [3, 9]:
-            if not self.bishopCanMoveToPos(startPos, endPos, whiteMove):
+            if not self.bishopCanMoveToPos(startPos, endPos):
                 return False, f"Bishop cannot move to {endPos}"
 
         # QUEENS
         elif pieceChannel in [4, 10]:
             if not (
-                self.bishopCanMoveToPos(startPos, endPos, whiteMove)
-                or self.rookCanMoveToPos(startPos, endPos, whiteMove)
+                self.bishopCanMoveToPos(startPos, endPos)
+                or self.rookCanMoveToPos(startPos, endPos)
             ):
                 return False, f"Queen cannot move to {endPos}"
 
         # KINGS
         elif pieceChannel in [5, 11]:
             if not (
-                self.kingCanMoveToPos
+                self.kingCanMoveToPos(startPos, endPos)
                 or (  # Account for castling
                     (  # Cannot castle while in check
-                        not self.posAttackedBy(startPos, not whiteMove, quitAtOne=True)
+                        not self.posAttackedBy(startPos, False, quitAtOne=True)
                     )
                     and (
                         (  # White long castle
@@ -651,17 +659,17 @@ class Board:
                             and endPos == Position("C", 1)
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("B", 1), whiteMove, anyPiece=True
+                                    Position("B", 1), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("C", 1), whiteMove, anyPiece=True
+                                    Position("C", 1), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("D", 1), whiteMove, anyPiece=True
+                                    Position("D", 1), anyPiece=True
                                 )
                             )
                         )
@@ -672,12 +680,12 @@ class Board:
                             and endPos == Position("G", 1)
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("F", 1), whiteMove, anyPiece=True
+                                    Position("F", 1), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("G", 1), whiteMove, anyPiece=True
+                                    Position("G", 1), anyPiece=True
                                 )
                             )
                         )
@@ -688,17 +696,17 @@ class Board:
                             and endPos == Position("C", 8)
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("B", 8), whiteMove, anyPiece=True
+                                    Position("B", 8), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("C", 8), whiteMove, anyPiece=True
+                                    Position("C", 8), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("D", 8), whiteMove, anyPiece=True
+                                    Position("D", 8), anyPiece=True
                                 )
                             )
                         )
@@ -709,12 +717,12 @@ class Board:
                             and endPos == Position("G", 8)
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("F", 8), whiteMove, anyPiece=True
+                                    Position("F", 8), anyPiece=True
                                 )
                             )
                             and (
                                 not self.posContainsOwnPiece(
-                                    Position("G", 8), whiteMove, anyPiece=True
+                                    Position("G", 8), anyPiece=True
                                 )
                             )
                         )
@@ -723,21 +731,22 @@ class Board:
             ):
                 return False, f"King cannot move to {endPos}"
             # Cannot move into check
-            if self.posAttackedBy(endPos, not whiteMove, quitAtOne=True):
+            if self.posAttackedBy(endPos, False, quitAtOne=True):
                 return False, f"Moving king to {endPos} will place it in check"
 
+        if move == "E8G8":
+            F8_open = not self.posContainsOwnPiece(Position("F", 8), anyPiece=True)
+            G8_open = not self.posContainsOwnPiece(Position("G", 8), anyPiece=True)
+            print(f"King did not get blocked. F8 open: {F8_open}, G8 open: {G8_open}")
+
         # Test for revealed checks
-        temp_board_state, _ = self.update(
-            move, whiteMove, realUpdate=False
-        )  # Simulate move
-        kingPosition = self.getMaskPositions(temp_board_state[5 if whiteMove else 11])[
-            0
-        ]
-        attackers = self.posAttackedBy(
-            kingPosition, not whiteMove, board=temp_board_state
-        )
+        temp_board_state, _ = self.update(move, realUpdate=False)  # Simulate move
+        kingPosition = self.getMaskPositions(
+            temp_board_state[5 if self.whiteMove else 11]
+        )[0]
+        attackers = self.posAttackedBy(kingPosition, False, board=temp_board_state)
         if self.posAttackedBy(
-            kingPosition, not whiteMove, board=temp_board_state, quitAtOne=True
+            kingPosition, False, board=temp_board_state, quitAtOne=True
         ):
             return (
                 False,

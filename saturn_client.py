@@ -1,7 +1,9 @@
-from jupiter.server.engine import BaseEngine, TimeControl
+from server.engine import BaseEngine, TimeControl
+
+from server.SaturnChessEngine.saturn_engine import Engine
 
 
-class SaturnEngine(BaseEngine):
+class SaturnClient(BaseEngine):
     name: str = "Saturn"
 
     def init(self, _tc: TimeControl, _fen: str | None = None) -> None:
@@ -19,7 +21,7 @@ class SaturnEngine(BaseEngine):
         The engine is expected to function in accordance with the rules, no
         further validation is performed.
         """
-        raise NotImplementedError("Please implement this method")
+        self.engine = Engine()
 
     def go(self, _ms_left: int) -> str:
         """Searches for the best move given the amount of time left.
@@ -34,7 +36,9 @@ class SaturnEngine(BaseEngine):
         The engine is expected to function in accordance with the rules, no
         further validation is performed.
         """
-        raise NotImplementedError("Please implement this method")
+
+        move = self.engine.decideMove()
+        return move
 
     def move(self, _move: str) -> None:
         """Applies a move to the internal state of the engine.
@@ -49,4 +53,4 @@ class SaturnEngine(BaseEngine):
         The engine is expected to function in accordance with the rules, no
         further validation is performed.
         """
-        raise NotImplementedError("Please implement this method")
+        self.engine.playMove(_move)

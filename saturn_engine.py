@@ -1,25 +1,31 @@
+import server.SaturnChessEngine.saturn_shared as saturn_shared
+from server.SaturnChessEngine.network import SaturnNetwork
+from server.SaturnChessEngine.util import mask_to_bitmap
+
 import json
 import torch
-
-import saturn_shared
-from network import SaturnNetwork
+from time import sleep
 
 
 class Engine:
-    def __init__(self, playingWhite):
-        self.board = saturn_shared.Board
-        self.playingWhite = playingWhite
+    def __init__(self):
+        self.board = saturn_shared.Board()
 
-        with open("allowed_moves.json", "r") as file:
+        with open("server/SaturnChessEngine/allowed_moves.json", "r") as file:
             self.moves_list = json.load(file)
 
         # Number of outputs is equal to the number of moves listed in allowed_moves
         self.model = SaturnNetwork(len(self.moves_list))
-        self.model.load_state_dict(torch.load("saturn_weights.pth"))  # Load weights
+        self.model.load_state_dict(
+            torch.load("server/SaturnChessEngine/saturn_weights.pth")
+        )  # Load weights
         self.model.eval()  # Inference mode
 
-    def opponentMove(self, move):
-        self.board.update(move, not self.playingWhite)
+    def playMove(self, move):
+        # sleep(4)
+        print(f"\nSATURN: Updated by playing move: {move}")
+        self.board.update(move)
+        print(self.board.render())
 
     def decideMove(self):
         board = []
@@ -34,11 +40,12 @@ class Engine:
         params = torch.tensor(params, dtype=torch.float32).unsqueeze(0)
 
         move_logits, promotion_logits, _ = self.model(board, params)
-        sorted_moves = torch.argsort(move_logits, descending=True)
+        sorted_moves = torch.argsort(move_logits[0], descending=True)
 
+        moves_discarded = 0
         for move_index in sorted_moves:
             move = self.moves_list[move_index.item()]
-            legal, reason = self.board.moveLegal(move, self.playingWhite)
+            legal, reason = self.board.moveLegal(move)
             if legal:  # Move is legal
 
                 # Add promotion if needed
@@ -48,13 +55,18 @@ class Engine:
                     channel_at_pos == 6 and move[3] == 1
                 ):
                     # Select promotion
-                    move += ["q", "n", "b", "r"][torch.argmax(promotion_logits).item()]
+                    move += ["q", "n", "b", "r"][
+                        torch.argmax(promotion_logits[0]).item()
+                    ]
 
+                # Actually, do not perform update here. Update is sent back from server
                 # Perform move to update board
-                self.board.update(move, self.playingWhite)
-
+                # self.board.update(move)
+                print(
+                    f"\nSATURN: Decided on move: {move}, type {type(move)}. Discarded {moves_discarded} moves"
+                )
                 return move
             else:
-                {}
+                moves_discarded += 1
                 # Attempted illegal moves can be logged here later
                 # print(f"Wanted to do move {move}, but couldn't: {reason}")
