@@ -60,21 +60,24 @@ class Position:
 
 
 class Board:
-    def __init__(self):
-        self.state = [
-            0b0000000000000000000000000000000000000000000000001111111100000000,  # White pawns
-            0b0000000000000000000000000000000000000000000000000000000010000001,  # White rooks
-            0b0000000000000000000000000000000000000000000000000000000001000010,  # White knights
-            0b0000000000000000000000000000000000000000000000000000000000100100,  # White bishops
-            0b0000000000000000000000000000000000000000000000000000000000001000,  # White queen
-            0b0000000000000000000000000000000000000000000000000000000000010000,  # White king
-            0b0000000011111111000000000000000000000000000000000000000000000000,  # Black pawns
-            0b1000000100000000000000000000000000000000000000000000000000000000,  # Black rooks
-            0b0100001000000000000000000000000000000000000000000000000000000000,  # Black knights
-            0b0010010000000000000000000000000000000000000000000000000000000000,  # Black bishops
-            0b0000100000000000000000000000000000000000000000000000000000000000,  # Black queen
-            0b0001000000000000000000000000000000000000000000000000000000000000,  # Black king
-        ]
+    def __init__(self, custom_layout=None):
+        if custom_layout == None:
+            self.state = [
+                0b0000000000000000000000000000000000000000000000001111111100000000,  # White pawns
+                0b0000000000000000000000000000000000000000000000000000000010000001,  # White rooks
+                0b0000000000000000000000000000000000000000000000000000000001000010,  # White knights
+                0b0000000000000000000000000000000000000000000000000000000000100100,  # White bishops
+                0b0000000000000000000000000000000000000000000000000000000000001000,  # White queen
+                0b0000000000000000000000000000000000000000000000000000000000010000,  # White king
+                0b0000000011111111000000000000000000000000000000000000000000000000,  # Black pawns
+                0b1000000100000000000000000000000000000000000000000000000000000000,  # Black rooks
+                0b0100001000000000000000000000000000000000000000000000000000000000,  # Black knights
+                0b0010010000000000000000000000000000000000000000000000000000000000,  # Black bishops
+                0b0000100000000000000000000000000000000000000000000000000000000000,  # Black queen
+                0b0001000000000000000000000000000000000000000000000000000000000000,  # Black king
+            ]
+        else:
+            self.state = custom_layout  # Allow custom board setups, but ignore custom params (for now)
         (
             self.whiteCanLongCastle,
             self.whiteCanShortCastle,
@@ -199,7 +202,6 @@ class Board:
         if pos.isBishopAligned(otherPos):
             # Check that final pos does not contain own piece
             if self.posContainsOwnPiece(otherPos, whiteMove):
-                print("Pos contains own piece")
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -337,17 +339,18 @@ class Board:
         if pieceChannel == 5:  # White Castle
             if self.whiteCanLongCastle and endPos.file == File.C:
                 self.movePiece(Position("A", 1), Position("D", 1), 1)
-                self.whiteCanLongCastle, self.whiteCanShortCastle = False, False
             if self.whiteCanShortCastle and endPos.file == File.G:
                 self.movePiece(Position("H", 1), Position("F", 1), 1)
-                self.whiteCanLongCastle, self.whiteCanShortCastle = False, False
+                # Invalidate castle after king has moved
+            self.whiteCanLongCastle, self.whiteCanShortCastle = False, False
+
         elif pieceChannel == 11:  # Black Castle
             if self.blackCanLongCastle and endPos.file == File.C:
                 self.movePiece(Position("A", 8), Position("D", 8), 7)
-                self.blackCanLongCastle, self.blackCanShortCastle = False, False
             if self.blackCanShortCastle and endPos.file == File.G:
                 self.movePiece(Position("H", 8), Position("F", 8), 7)
-                self.blackCanLongCastle, self.blackCanShortCastle = False, False
+                # Invalidate castle after king has moved
+            self.blackCanLongCastle, self.blackCanShortCastle = False, False
 
         # Invalidate castles once rooks are moved
         if pieceChannel == 1:
@@ -363,18 +366,15 @@ class Board:
 
         # Capture
         if self.identifyChannelFromPos(endPos) != None:
-            # En Passant derivation check
-            if self.previousMovePawnPushedFile == endPos.file and (
-                (whiteMove and pieceChannel == 0 and endPos.rank == 5)
-                or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 2)
-            ):
-                takePos = Position(endPos.file, startPos.rank, fromPositionParts=True)
-                print(
-                    f"Taking enpassant from {takePos} while moving to {endPos}, move: {move}"
-                )
-                self.takePiece(takePos, whiteMove)
-            else:
-                self.takePiece(endPos, whiteMove)
+            self.takePiece(endPos, whiteMove)
+
+        # En Passant derivation check
+        if self.previousMovePawnPushedFile == endPos.file and (
+            (whiteMove and pieceChannel == 0 and endPos.rank == 5)
+            or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 2)
+        ):
+            takePos = Position(endPos.file, startPos.rank, fromPositionParts=True)
+            self.takePiece(takePos, whiteMove)
 
         # Standard Move
         self.movePiece(startPos, endPos, pieceChannel)
@@ -414,29 +414,27 @@ class Board:
         forTake: bool = True,
     ):
         if board == None:
-            board_state = self.state
-        elif type(board) == Board:
-            board_state = board.state
-        else:
-            board_state = board
+            board = self
+        elif type(board) != Board:
+            board = Board(board)
 
         attackingShortlist = []
         if checkAttackedByWhite == None:
-            pieceChannel = self.identifyChannelFromPos(pos)
+            pieceChannel = board.identifyChannelFromPos(pos)
         else:
             pieceChannel = 6 * int(
                 not checkAttackedByWhite
             )  # Will be 0 if white move (therefore finding white pieces), or 6 if black move (therefore finding black pieces)
         if pieceChannel < 6:
             checkingWhite = True
-            attackingPieces = board_state[:6]
+            attackingPieces = board.state[:6]
             # Use the fact that there is 1 king and so location must be power of two to identify digit position in mask
         else:
             checkingWhite = False
-            attackingPieces = board_state[6:]
+            attackingPieces = board.state[6:]
 
         # Pawns
-        for pawn in self.getMaskPositions(attackingPieces[0]):
+        for pawn in board.getMaskPositions(attackingPieces[0]):
             moveDirection = 1 if checkingWhite else -1
             nextRank = pawn.rank + moveDirection
             if (
@@ -449,13 +447,13 @@ class Board:
                     return True
             elif pos.file.value - pawn.file.value == 0 and not (  # If just pushing pawn
                 forTake
-                or self.posContainsOwnPiece(
+                or board.posContainsOwnPiece(
                     Position(pos.file, nextRank, True), anyPiece=True
                 )
             ):
                 # First check for double push
                 if abs(pos.rank - pawn.rank) == 2 and (
-                    not self.posContainsOwnPiece(
+                    not board.posContainsOwnPiece(
                         Position(pos.file, nextRank + moveDirection, True),
                         anyPiece=True,
                     )
@@ -470,38 +468,38 @@ class Board:
                         return True
 
         # Rooks
-        for rook in self.getMaskPositions(attackingPieces[1]):
-            if self.rookCanMoveToPos(rook, pos, checkAttackedByWhite):
+        for rook in board.getMaskPositions(attackingPieces[1]):
+            if board.rookCanMoveToPos(rook, pos, checkAttackedByWhite):
                 attackingShortlist.append(rook)
                 if quitAtOne:
                     return True
 
         # Knights
-        for knight in self.getMaskPositions(attackingPieces[2]):
-            if self.knightCanMoveToPos(knight, pos, checkAttackedByWhite):
+        for knight in board.getMaskPositions(attackingPieces[2]):
+            if board.knightCanMoveToPos(knight, pos, checkAttackedByWhite):
                 attackingShortlist.append(knight)
                 if quitAtOne:
                     return True
 
         # Bishops
-        for bishop in self.getMaskPositions(attackingPieces[3]):
-            if self.bishopCanMoveToPos(bishop, pos, checkAttackedByWhite):
+        for bishop in board.getMaskPositions(attackingPieces[3]):
+            if board.bishopCanMoveToPos(bishop, pos, checkAttackedByWhite):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
                     return True
 
         # Queens
-        for queen in self.getMaskPositions(attackingPieces[4]):
-            if self.bishopCanMoveToPos(
+        for queen in board.getMaskPositions(attackingPieces[4]):
+            if board.bishopCanMoveToPos(
                 queen, pos, checkAttackedByWhite
-            ) or self.rookCanMoveToPos(queen, pos, checkAttackedByWhite):
+            ) or board.rookCanMoveToPos(queen, pos, checkAttackedByWhite):
                 attackingShortlist.append(queen)
                 if quitAtOne:
                     return True
 
         # King
-        king = self.getMaskPositions(attackingPieces[5])[0]
-        if self.kingCanMoveToPos(king, pos, checkAttackedByWhite):
+        king = board.getMaskPositions(attackingPieces[5])[0]
+        if board.kingCanMoveToPos(king, pos, checkAttackedByWhite):
             attackingShortlist.append(king)
             if quitAtOne:
                 return True
@@ -735,12 +733,15 @@ class Board:
         kingPosition = self.getMaskPositions(temp_board_state[5 if whiteMove else 11])[
             0
         ]
+        attackers = self.posAttackedBy(
+            kingPosition, not whiteMove, board=temp_board_state
+        )
         if self.posAttackedBy(
             kingPosition, not whiteMove, board=temp_board_state, quitAtOne=True
         ):
             return (
                 False,
-                f"Cannot move {startPos} to {endPos} as it leaves king in check",
+                f"Cannot move {startPos} to {endPos} as it leaves king at {kingPosition} in check from attacker(s) at {[str(a) for a in attackers]}. New state is:\n{self.render(temp_board_state)}",
             )
 
         return True, f"Moving {startPos} to {endPos} is legal"

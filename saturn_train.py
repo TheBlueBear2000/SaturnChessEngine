@@ -90,7 +90,12 @@ for game in dataset:
 
         optimizer.step()
 
-        if game_num % 50 == 0:
-            print(f"Current loss: {loss.item()}")
+    if game_num % 50 == 0:
+        print(f"Game number {game_num}, Current loss: {loss.item()}", end="\r")
+print()  # Bypass carridge return of progress listing
 
-print("Training complete!")
+print(f"Training complete! Finished with final loss of {loss.item()}\nSaving...")
+
+torch.save(model.state_dict(), "saturn_weights.pth")
+
+print("Saved and done!")

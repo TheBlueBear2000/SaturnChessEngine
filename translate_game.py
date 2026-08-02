@@ -62,7 +62,6 @@ def translate(game: str):
     whiteMove = True
     for m_i, move in enumerate(raw_moves):
         # First figure out move full LAN notation based on gamestate, then make move
-        # print(f"MOVE: {move}, WHITE: {whiteMove}")
         move = move.strip("!").strip("?")  # Strip quality annotation
         (
             castling,
@@ -115,6 +114,7 @@ def translate(game: str):
             if len(positions) > 1:
                 canSee = board.posAttackedBy(endPos, whiteMove, board, forTake=capture)
                 positions = [posit for posit in positions if posit in canSee]
+
                 if len(positions) == 1:
                     startPos = positions[0]
                 else:
@@ -124,21 +124,16 @@ def translate(game: str):
                         legal, r = board.moveLegal(f"{sim_pos}{endPos}", whiteMove)
                         if legal:
                             startPos = sim_pos
-                        else:
-                            print(
-                                f"{board.render()}\nMove {sim_pos}{endPos} illegal here. Reason: {r}"
-                            )
-
-                if startPos == None:
-                    raise Exception(
-                        f"Cannot find any piece to go to {endPos} in channel {piece_channel} whiteMove: {whiteMove}\n{board.render()}"
-                    )
 
             elif len(positions) == 1:
                 startPos = positions[0]
-            else:
+
+            if startPos == None:
+                # Full game and move details printed for diagnosis
+                for turn in output:
+                    print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
                 raise Exception(
-                    f"Cannot find piece that goes to {endPos} whiteMove: {whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {all_piece_positions}\nPositions: {positions}\ncanSee: {canSee}"
+                    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}"
                 )
 
         if promotion == None:

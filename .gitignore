@@ -4,3 +4,4 @@ training_data/*
 pyproject.toml
 __pycache__/*
 .DS_Store
+saturn_weights.pth
