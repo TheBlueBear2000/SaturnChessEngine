@@ -4,6 +4,15 @@ import saturn_shared
 PIECE_CHANNELS = [None, "R", "N", "B", "Q", "K"]
 
 
+def parse_eval(eval):
+    if eval.startswith("#"):
+        return 100000 - int(eval[1:])
+    elif eval.startswith("-#"):
+        return -100000 + int(eval[2:])
+    else:
+        return int(round(float(eval) * 100))
+
+
 # Takes in a game as a string, produces a set of board states and parameters
 def translate(game: str):
 
@@ -30,10 +39,8 @@ def translate(game: str):
     for wm, we, bm, be in game_pattern.findall(game):
         raw_moves.append(wm)
         raw_moves.append(bm)
-        evals.append(float(we))
-        evals.append(float(be))
-
-    print(f"Game: {raw_moves}")
+        evals.append(parse_eval(we))
+        evals.append(parse_eval(be))
 
     # Translate moves into server LAN by simulating game
     move_pattern = re.compile(
@@ -55,7 +62,8 @@ def translate(game: str):
     whiteMove = True
     for m_i, move in enumerate(raw_moves):
         # First figure out move full LAN notation based on gamestate, then make move
-        print(f"\n\nMOVE: {move}, WHITE: {whiteMove}")
+        # print(f"MOVE: {move}, WHITE: {whiteMove}")
+        move = move.strip("!").strip("?")  # Strip quality annotation
         (
             castling,
             piece,
@@ -70,14 +78,14 @@ def translate(game: str):
 
         startPos = None
 
-        if castling == "O-O-O":
+        if castling == "O-O-O":  # Long castle
             if whiteMove:
                 startPos = saturn_shared.Position("E", 1)
                 endPos = saturn_shared.Position("C", 1)
             else:
                 startPos = saturn_shared.Position("E", 8)
                 endPos = saturn_shared.Position("C", 8)
-        elif castling == "O-O":
+        elif castling == "O-O":  # Short castle
             if whiteMove:
                 startPos = saturn_shared.Position("E", 1)
                 endPos = saturn_shared.Position("G", 1)
@@ -85,6 +93,7 @@ def translate(game: str):
                 startPos = saturn_shared.Position("E", 8)
                 endPos = saturn_shared.Position("G", 8)
 
+        # If move is not castling, standard info is extracted
         else:
             endPos = saturn_shared.Position(destination[0], destination[1])
             if whiteMove:
@@ -94,40 +103,43 @@ def translate(game: str):
             piece_channel = PIECE_CHANNELS.index(piece)
             pieceTypeMask = possiblePieces[piece_channel]
             all_piece_positions = board.getMaskPositions(pieceTypeMask)
-            print(f"All piece positions: {[str(p) for p in all_piece_positions]}")
 
             # Filter by disambiguation
             positions = []
-            print(f"Disambiguation: {disambiguation}")
+            canSee = []
             for pos in all_piece_positions:
                 if disambiguation in str(pos).lower():
                     positions.append(pos)
-            print(f"Filtered positions: {[str(p) for p in positions]}")
 
             # If there are still multiple candidates, check which can attack the square depending on type
             if len(positions) > 1:
                 canSee = board.posAttackedBy(endPos, whiteMove, board, forTake=capture)
-                print(
-                    f"canSee: {[str(attacker) for attacker in canSee]}\nPositions: {[str(position) for position in positions]}\nEndPos: {str(endPos)}\nBoard State:"
-                )
-
-                print(board.render())
-                print(
-                    f"canSee type: {type(canSee[0])}, positions type: {type(positions[0])}"
-                )
-                for pos in positions:
-                    if pos in canSee:
-                        startPos = pos
+                positions = [posit for posit in positions if posit in canSee]
+                if len(positions) == 1:
+                    startPos = positions[0]
+                else:
+                    # If combinational filtering doesnt fix, one piece must be held by threatened check
+                    # Best way to find which is to simulate all moves until one is legal
+                    for sim_pos in positions:
+                        legal, r = board.moveLegal(f"{sim_pos}{endPos}", whiteMove)
+                        if legal:
+                            startPos = sim_pos
+                        else:
+                            print(
+                                f"{board.render()}\nMove {sim_pos}{endPos} illegal here. Reason: {r}"
+                            )
 
                 if startPos == None:
                     raise Exception(
-                        f"Cannot find any piece to go to {endPos} in channel {piece_channel}"
+                        f"Cannot find any piece to go to {endPos} in channel {piece_channel} whiteMove: {whiteMove}\n{board.render()}"
                     )
 
             elif len(positions) == 1:
                 startPos = positions[0]
             else:
-                raise Exception(f"Cannot find piece that goes to {str(endPos)}")
+                raise Exception(
+                    f"Cannot find piece that goes to {endPos} whiteMove: {whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {all_piece_positions}\nPositions: {positions}\ncanSee: {canSee}"
+                )
 
         if promotion == None:
             promotion = ""
@@ -143,7 +155,7 @@ def translate(game: str):
                 "board": board.getBoardCopy(),
                 "params": board.getParams(),
                 "move": translatedMove,
-                "evaluation": evals[m_i],
+                "eval": evals[m_i],
             }
         )
 

@@ -257,7 +257,7 @@ class Board:
                     self.blackScore += score
                 return
         raise Exception(
-            f"Move alledges to capture piece, but there is no piece to capture at {endPos}"
+            f"Move alledges to capture piece, but there is no piece to capture at {takePos}, whiteMove: {whiteMove}\n{self.render()}"
         )
 
     def stripMove(self, move: str, whiteMove: bool):
@@ -365,10 +365,13 @@ class Board:
         if self.identifyChannelFromPos(endPos) != None:
             # En Passant derivation check
             if self.previousMovePawnPushedFile == endPos.file and (
-                (whiteMove and pieceChannel == 0 and endPos.rank == 6)
-                or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 3)
+                (whiteMove and pieceChannel == 0 and endPos.rank == 5)
+                or ((not whiteMove) and pieceChannel == 6 and endPos.rank == 2)
             ):
                 takePos = Position(endPos.file, startPos.rank, fromPositionParts=True)
+                print(
+                    f"Taking enpassant from {takePos} while moving to {endPos}, move: {move}"
+                )
                 self.takePiece(takePos, whiteMove)
             else:
                 self.takePiece(endPos, whiteMove)
@@ -378,10 +381,10 @@ class Board:
 
         # Promotion
         if pieceChannel in [0, 6] and promoteTo != "":
-            self.state[channel] &= ~self.positionToMask(endPos)  # Delete pawn
+            self.state[pieceChannel] &= ~self.positionToMask(endPos)  # Delete pawn
             self.state[
-                (CHANNEL_ORDER.index(piece) + 1)
-                + (6 * int(whiteMove))  # Identify channel of new piece
+                (CHANNEL_ORDER.index(promoteTo) + 1)
+                + (6 * int(not whiteMove))  # Identify channel of new piece
             ] |= self.positionToMask(
                 endPos
             )  # Add new piece by channel
@@ -411,8 +414,12 @@ class Board:
         forTake: bool = True,
     ):
         if board == None:
-            board = self.state
-        print(f"checkAttackedByWhite: {checkAttackedByWhite}")
+            board_state = self.state
+        elif type(board) == Board:
+            board_state = board.state
+        else:
+            board_state = board
+
         attackingShortlist = []
         if checkAttackedByWhite == None:
             pieceChannel = self.identifyChannelFromPos(pos)
@@ -422,17 +429,14 @@ class Board:
             )  # Will be 0 if white move (therefore finding white pieces), or 6 if black move (therefore finding black pieces)
         if pieceChannel < 6:
             checkingWhite = True
-            attackingPieces = board.state[:6]
-            print("checking white channels")
+            attackingPieces = board_state[:6]
             # Use the fact that there is 1 king and so location must be power of two to identify digit position in mask
         else:
             checkingWhite = False
-            attackingPieces = board.state[6:]
-            print("checking black channels")
+            attackingPieces = board_state[6:]
 
         # Pawns
         for pawn in self.getMaskPositions(attackingPieces[0]):
-            print(f"Checking pawn at {str(pawn)}")
             moveDirection = 1 if checkingWhite else -1
             nextRank = pawn.rank + moveDirection
             if (
@@ -467,7 +471,6 @@ class Board:
 
         # Rooks
         for rook in self.getMaskPositions(attackingPieces[1]):
-            print(f"Checking rook at {str(rook)}")
             if self.rookCanMoveToPos(rook, pos, checkAttackedByWhite):
                 attackingShortlist.append(rook)
                 if quitAtOne:
@@ -475,7 +478,6 @@ class Board:
 
         # Knights
         for knight in self.getMaskPositions(attackingPieces[2]):
-            print(f"Checking knight at {str(knight)}")
             if self.knightCanMoveToPos(knight, pos, checkAttackedByWhite):
                 attackingShortlist.append(knight)
                 if quitAtOne:
@@ -483,7 +485,6 @@ class Board:
 
         # Bishops
         for bishop in self.getMaskPositions(attackingPieces[3]):
-            print(f"Checking bishop at {str(bishop)}")
             if self.bishopCanMoveToPos(bishop, pos, checkAttackedByWhite):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
@@ -491,7 +492,6 @@ class Board:
 
         # Queens
         for queen in self.getMaskPositions(attackingPieces[4]):
-            print(f"Checking queen at {str(queen)}")
             if self.bishopCanMoveToPos(
                 queen, pos, checkAttackedByWhite
             ) or self.rookCanMoveToPos(queen, pos, checkAttackedByWhite):
@@ -501,7 +501,6 @@ class Board:
 
         # King
         king = self.getMaskPositions(attackingPieces[5])[0]
-        print(f"Checking king at {str(king)}")
         if self.kingCanMoveToPos(king, pos, checkAttackedByWhite):
             attackingShortlist.append(king)
             if quitAtOne:
@@ -542,7 +541,7 @@ class Board:
 
         # PAWNS
         if pieceChannel == 0:  # White pawn
-            if startPos.rank == 2 and endPos.rank == 4 and startPos.file == endPos.file:
+            if startPos.rank == 1 and endPos.rank == 3 and startPos.file == endPos.file:
                 # Pawn is trying to double push, check that there are no pieces between or on
                 if self.posContainsOwnPiece(
                     endPos, anyPiece=True
@@ -568,7 +567,7 @@ class Board:
                             )  # Check for enemy piece
                             or (
                                 self.previousMovePawnPushedFile == endPos.file
-                                and endPos.rank == 6
+                                and endPos.rank == 5
                             )
                         ):
                             return (
@@ -579,7 +578,7 @@ class Board:
                 return False, f"Illegal pawn move from {startPos} to {endPos}"
 
         elif pieceChannel == 6:  # Black pawn
-            if startPos.rank == 7 and endPos.rank == 5 and startPos.file == endPos.file:
+            if startPos.rank == 6 and endPos.rank == 4 and startPos.file == endPos.file:
                 # Pawn is trying to double push, check that there are no pieces between or on
                 if self.posContainsOwnPiece(  # Check target log
                     endPos, anyPiece=True
@@ -605,7 +604,7 @@ class Board:
                             )  # Check for enemy piece
                             or (
                                 self.previousMovePawnPushedFile == endPos.file
-                                and endPos.rank == 3
+                                and endPos.rank == 2
                             )
                         ):
                             return (

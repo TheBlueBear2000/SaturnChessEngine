@@ -3,6 +3,7 @@ from datasets import load_dataset
 import translate_game
 from network import SaturnNetwork
 from util import mask_to_bitmap
+from saturn_shared import Board
 import json
 
 import torch
@@ -26,7 +27,7 @@ print("Gathering data...")
 streamed_dataset = load_dataset(
     "Lichess/tournament-chess-games", split="train", streaming=True
 )
-detailed_dataset = streamed_dataset.take(10)
+detailed_dataset = streamed_dataset.take(500)
 
 # Convert the stream subset to a list of games (other information is irrelevant)
 dataset = [game["movetext"] for game in list(detailed_dataset)]
@@ -65,7 +66,7 @@ for game in dataset:
         # Extract promotion data from move
         promotion = False
         if len(full_move) == 5:
-            promotion_target = ["q", "n", "b", "r"].index(move[4])
+            promotion_target = ["q", "n", "b", "r"].index(full_move[4])
             promotion = True
 
         eval_target = turn["eval"]
@@ -89,7 +90,7 @@ for game in dataset:
 
         optimizer.step()
 
-        if game_num % 100 == 0:
+        if game_num % 50 == 0:
             print(f"Current loss: {loss.item()}")
 
 print("Training complete!")
