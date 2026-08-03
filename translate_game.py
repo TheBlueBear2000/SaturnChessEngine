@@ -1,4 +1,4 @@
-import server.SaturnChessEngine.saturn_shared as saturn_shared
+import saturn_shared as saturn_shared
 
 import re
 
@@ -60,7 +60,6 @@ def translate(game: str):
         re.VERBOSE,
     )
     board = saturn_shared.Board()  # Initiate game
-    whiteMove = True
     for m_i, move in enumerate(raw_moves):
         # First figure out move full LAN notation based on gamestate, then make move
         move = move.strip("!").strip("?")  # Strip quality annotation
@@ -79,14 +78,14 @@ def translate(game: str):
         startPos = None
 
         if castling == "O-O-O":  # Long castle
-            if whiteMove:
+            if board.whiteMove:
                 startPos = saturn_shared.Position("E", 1)
                 endPos = saturn_shared.Position("C", 1)
             else:
                 startPos = saturn_shared.Position("E", 8)
                 endPos = saturn_shared.Position("C", 8)
         elif castling == "O-O":  # Short castle
-            if whiteMove:
+            if board.whiteMove:
                 startPos = saturn_shared.Position("E", 1)
                 endPos = saturn_shared.Position("G", 1)
             else:
@@ -96,7 +95,7 @@ def translate(game: str):
         # If move is not castling, standard info is extracted
         else:
             endPos = saturn_shared.Position(destination[0], destination[1])
-            if whiteMove:
+            if board.whiteMove:
                 possiblePieces = board.state[:6]
             else:
                 possiblePieces = board.state[6:]
@@ -113,18 +112,23 @@ def translate(game: str):
 
             # If there are still multiple candidates, check which can attack the square depending on type
             if len(positions) > 1:
-                canSee = board.posAttackedBy(endPos, whiteMove, board, forTake=capture)
-                positions = [posit for posit in positions if posit in canSee]
+                canSee = board.posAttackedBy(endPos, board, forTake=capture)
+                filtered_positions = [posit for posit in positions if posit in canSee]
 
-                if len(positions) == 1:
-                    startPos = positions[0]
+                if len(filtered_positions) == 1:
+                    startPos = filtered_positions[0]
                 else:
                     # If combinational filtering doesnt fix, one piece must be held by threatened check
                     # Best way to find which is to simulate all moves until one is legal
-                    for sim_pos in positions:
-                        legal, r = board.moveLegal(f"{sim_pos}{endPos}", whiteMove)
+                    legal_positions = []
+                    for sim_pos in filtered_positions:
+                        legal, r = board.moveLegal(f"{sim_pos}{endPos}")
                         if legal:
-                            startPos = sim_pos
+                            legal_positions.append(sim_pos)
+                        # else:
+                        #    print(f"From {sim_pos} is illegal: {r}")
+                    if len(legal_positions) == 1:
+                        startPos = legal_positions[0]
 
             elif len(positions) == 1:
                 startPos = positions[0]
@@ -134,7 +138,7 @@ def translate(game: str):
                 for turn in output:
                     print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
                 raise Exception(
-                    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}"
+                    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
                 )
 
         if promotion == None:
@@ -156,8 +160,6 @@ def translate(game: str):
         )
 
         # Update board after recording previous position, so that each move corresponds to previous board state
-        board.update(translatedMove, whiteMove)
-
-        whiteMove = not whiteMove  # Alternate after each move
+        board.update(translatedMove)
 
     return output

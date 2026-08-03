@@ -1,8 +1,8 @@
 print("Starting...")
 from datasets import load_dataset
-import server.SaturnChessEngine.translate_game as translate_game
-from server.SaturnChessEngine.network import SaturnNetwork
-from server.SaturnChessEngine.util import mask_to_bitmap
+import translate_game as translate_game
+from network import SaturnNetwork
+from util import mask_to_bitmap
 
 import json
 import torch
@@ -13,7 +13,7 @@ MSE = nn.MSELoss()
 
 ### LOAD MODEL ###
 print("Loading model...")
-with open("server/SaturnChessEngine/allowed_moves.json", "r") as file:
+with open("allowed_moves.json", "r") as file:
     allowed_moves = json.load(file)
 n_outputs = len(allowed_moves)  # Update to gather automatically from move loading
 model = SaturnNetwork(n_outputs)
@@ -22,24 +22,31 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 ### GET DATA ###
 print("Gathering data...")
-# Only grab first 10 rows for now
+
+LIMIT = None  # If None, whole dataset is streamed
+
 streamed_dataset = load_dataset(
     "Lichess/tournament-chess-games", split="train", streaming=True
 )
-detailed_dataset = streamed_dataset.take(500)
+
+games = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
+
+# Limit to a number
+# detailed_dataset = streamed_dataset.take(500)
 
 # Convert the stream subset to a list of games (other information is irrelevant)
-dataset = [game["movetext"] for game in list(detailed_dataset)]
+# dataset = [game["movetext"] for game in list(detailed_dataset)]
 
-print(f"Number of games gathered: {len(dataset)}")
+# print(f"Number of games gathered: {len(dataset)}")
 
 print("Beginning training...")
 game_num = 0
 model.train()
-for game in dataset:
+for game in games:
     game_num += 1
     # First each game must be translated into a set of board states for training
-    translated_game = translate_game.translate(game)
+    movetext = game["movetext"]
+    translated_game = translate_game.translate(movetext)
 
     for turn in translated_game:
         optimizer.zero_grad()  # Reset gradients
@@ -95,6 +102,6 @@ print()  # Bypass carridge return of progress listing
 
 print(f"Training complete! Finished with final loss of {loss.item()}\nSaving...")
 
-torch.save(model.state_dict(), "server/SaturnChessEngine/saturn_weights.pth")
+torch.save(model.state_dict(), "saturn_weights.pth")
 
 print("Saved and done!")
