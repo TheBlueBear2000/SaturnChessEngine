@@ -17,7 +17,7 @@ class Engine:
         # Number of outputs is equal to the number of moves listed in allowed_moves
         self.model = SaturnNetwork(len(self.moves_list))
         self.model.load_state_dict(
-            torch.load("server/SaturnChessEngine/saturn_weights.pth")
+            torch.load("server/SaturnChessEngine/moves/final_saturn_weights.pth")
         )  # Load weights
         self.model.eval()  # Inference mode
 

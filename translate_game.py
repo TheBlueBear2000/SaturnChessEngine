@@ -47,7 +47,7 @@ def translate(game: str):
     move_pattern = re.compile(
         r"""
     ^(?:
-        (O-O(?:-O)?)                     # Castling
+        (O-O(?:-O)?)([+#])?              # Castling, castle suffix (check/mate)
     |
         ([KQRBN])?                       # Piece (empty = pawn)
         ([a-h1-8]{0,2})                  # Disambiguation
@@ -63,15 +63,19 @@ def translate(game: str):
     for m_i, move in enumerate(raw_moves):
         # First figure out move full LAN notation based on gamestate, then make move
         move = move.strip("!").strip("?")  # Strip quality annotation
-        (
-            castling,
-            piece,
-            disambiguation,
-            capture,
-            destination,
-            promotion,
-            checkOrMate,
-        ) = move_pattern.match(move).groups()
+        try:
+            (
+                castling,
+                castle_suffix,
+                piece,
+                disambiguation,
+                capture,
+                destination,
+                promotion,
+                checkOrMate,
+            ) = move_pattern.match(move).groups()
+        except Exception as e:
+            raise Exception(f"\nProblem Move: {move}")
 
         capture = capture == "x"  # Turn capture into boolean
 
@@ -110,6 +114,10 @@ def translate(game: str):
                 if disambiguation in str(pos).lower():
                     positions.append(pos)
 
+            # Filter out end pos as moves cannot come from destination
+            if endPos in positions:
+                positions.remove(endPos)
+
             # If there are still multiple candidates, check which can attack the square depending on type
             if len(positions) > 1:
                 canSee = board.posAttackedBy(endPos, board, forTake=capture)
@@ -135,10 +143,13 @@ def translate(game: str):
 
             if startPos == None:
                 # Full game and move details printed for diagnosis
-                for turn in output:
-                    print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
+                # for turn in output:
+                #    print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
+                # raise Exception(
+                #    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
+                # )
                 raise Exception(
-                    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
+                    f"Cannot find piece that goes to {endPos}, last move: {move}, whiteMove: {board.whiteMove}\n{board.render()}"
                 )
 
         if promotion == None:

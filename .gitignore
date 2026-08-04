@@ -1,7 +1,6 @@
 jupiter/*
-training_data/*
 .python-version
 pyproject.toml
 __pycache__/*
 .DS_Store
-saturn_weights.pth
+models/checkpoint_*_saturn_weights.pth
