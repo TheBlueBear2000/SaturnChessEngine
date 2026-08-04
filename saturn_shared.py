@@ -165,8 +165,6 @@ class Board:
         if pos.isRookAligned(otherPos):
             # Check that final pos does not contain own piece
             if self.posContainsOwnPiece(otherPos):
-                # if str(otherPos) == "G8":
-                #    print(f"Cannot see G8 from {pos} rook as it contains own piece")
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -205,20 +203,13 @@ class Board:
         return False
 
     def bishopCanMoveToPos(self, pos: Position, otherPos: Position):
-        # print(f"Seeing if Bishop at {pos} can move to {otherPos}")
         if pos.isBishopAligned(otherPos):
             # Check that final pos does not contain own piece
             if self.posContainsOwnPiece(otherPos):
-                # if str(otherPos) == "E1":
-                #     print(
-                #         f"Bishop at {pos} cannot move to {otherPos} as it contains own piece. WhiteMove: {self.whiteMove}"
-                #     )
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
             if pos.rank + pos.file.value == otherPos.rank + otherPos.file.value:
-                # if str(otherPos) == "E1":
-                #     print("Checking negative diagonal")
                 # Aligned negative diagonal
                 diagonal_value = pos.rank + pos.file.value
                 for rank in range(
@@ -231,16 +222,10 @@ class Board:
                     )
                     for channel in self.state:
                         if checkMask & channel:
-                            # if str(otherPos) == "E1":
-                            #     print(
-                            #         f"Bishop at {pos} cannot see E1 because of piece at {File(diagonal_value - rank)}{rank}"
-                            #     )
                             return False
                 return True
             else:
                 # Aligned positive diagonal
-                # if str(otherPos) == "E1":
-                #     print("Checking positive diagonal")
                 diagonal_value = pos.rank - pos.file.value
                 for rank in range(
                     min(pos.rank, otherPos.rank) + 1, max(pos.rank, otherPos.rank)
@@ -466,13 +451,9 @@ class Board:
             board.whiteMove = not board.whiteMove
 
         if checkingWhite:
-            # print(type(board.state), type(board))
-            # print(board.state)
             attackingPieces = board.state[:6]
-            # print("Checking white pieces")
         else:
             attackingPieces = board.state[6:]
-            # print("Checking black pieces")
 
         # Pawns
         for pawn in board.getMaskPositions(attackingPieces[0]):
@@ -524,11 +505,6 @@ class Board:
 
         # Bishops
         for bishop in board.getMaskPositions(attackingPieces[3]):
-            # if str(pos) == "E1":
-            #     print(f"Checking bishop {bishop} can move to position E1")
-
-            # NOTE TO SELF: For some reason the bishop doesnt know that it can see the king. Perhaps it thinks that the king is its own piece? investigate
-
             if board.bishopCanMoveToPos(bishop, pos):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
@@ -778,10 +754,9 @@ class Board:
         kingPosition = self.getMaskPositions(
             temp_board_state[5 if self.whiteMove else 11]
         )[0]
-        # print(f"King position: {kingPosition}")
+
         attackers = self.posAttackedBy(kingPosition, board=temp_board_state, flip=True)
-        # print(f"Attackers: {[str(p) for p in attackers]}")
-        # print(self.render(temp_board_state))
+
         if self.posAttackedBy(
             kingPosition, board=temp_board_state, quitAtOne=True, flip=True
         ):

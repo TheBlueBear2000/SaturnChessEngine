@@ -1,6 +1,6 @@
-import server.SaturnChessEngine.saturn_shared as saturn_shared
-from server.SaturnChessEngine.network import SaturnNetwork
-from server.SaturnChessEngine.util import mask_to_bitmap
+import saturn_shared as saturn_shared
+from network import SaturnNetwork
+from util import mask_to_bitmap
 
 import json
 import torch
@@ -8,24 +8,25 @@ from time import sleep
 
 
 class Engine:
-    def __init__(self):
+    def __init__(self, silent=False):
+        self.silent = silent  # Do not print if silent
         self.board = saturn_shared.Board()
 
-        with open("server/SaturnChessEngine/allowed_moves.json", "r") as file:
+        with open("allowed_moves.json", "r") as file:
             self.moves_list = json.load(file)
 
         # Number of outputs is equal to the number of moves listed in allowed_moves
         self.model = SaturnNetwork(len(self.moves_list))
         self.model.load_state_dict(
-            torch.load("server/SaturnChessEngine/moves/final_saturn_weights.pth")
+            torch.load("models/final_saturn_weights.pth")
         )  # Load weights
         self.model.eval()  # Inference mode
 
     def playMove(self, move):
-        # sleep(4)
-        print(f"\nSATURN: Updated by playing move: {move}")
         self.board.update(move)
-        print(self.board.render())
+        if not self.silent:
+            print(f"\nSATURN: Updated by playing move: {move}")
+            print(self.board.render())
 
     def decideMove(self):
         board = []
@@ -62,11 +63,11 @@ class Engine:
                 # Actually, do not perform update here. Update is sent back from server
                 # Perform move to update board
                 # self.board.update(move)
-                print(
-                    f"\nSATURN: Decided on move: {move}, type {type(move)}. Discarded {moves_discarded} moves"
-                )
-                return move
+                if not self.silent:
+                    print(
+                        f"\nSATURN: Decided on move: {move}. Discarded {moves_discarded} moves"
+                    )
+                return move.lower()  # Format to lowercase for server
             else:
                 moves_discarded += 1
                 # Attempted illegal moves can be logged here later
-                # print(f"Wanted to do move {move}, but couldn't: {reason}")
