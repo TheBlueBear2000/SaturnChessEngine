@@ -2,19 +2,27 @@ from saturn_engine import Engine
 
 from time import sleep
 
-PLAY_WHITE = True
+PLAY_WHITE = False
 
 engine = Engine(silent=True)
 
+
+def render(engine, move=None):
+    moveString = f"\nMove: {move}" if move != None else ""
+    # Uncomment for deep board rendering (each bitboard):
+    # print(f"{moveString}\n{engine.board.deepRender()}")
+    print(f"{moveString}\n{engine.board.render()}")
+
+
 print("Welcome to Saturn play local!")
-print(engine.board.render())
+render(engine)
 
 # If playing white, make first move, then act asif playing black
 if PLAY_WHITE:
     sleep(1)
     move = engine.decideMove()
     engine.playMove(move)
-    print(f"\nOpening Move: {move}\n{engine.board.render()}")
+    render(engine, move)
 
 while True:
     # Get player move (in correct format)
@@ -43,7 +51,7 @@ while True:
     engine.playMove(playerMove)
 
     # Render
-    print(f"\n{engine.board.render()}")
+    render(engine)
 
     # Wait for a second
     sleep(1)
@@ -51,4 +59,4 @@ while True:
     # Return move
     move = engine.decideMove()
     engine.playMove(move)
-    print(f"\nMove: {move}\n{engine.board.render()}")
+    render(engine, move)

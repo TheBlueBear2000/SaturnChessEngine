@@ -160,6 +160,19 @@ class Board:
             image += f"{8-row} " + line[::-1] + "\n"
         return image + "  abcdefgh"
 
+    def deepRender(self, board=None):
+        channelIcons = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"]
+        if board == None:
+            board = self.state
+        image = ""
+        for channel, mask in enumerate(board):
+            image += f"Channel: {channelIcons[channel]}\n"
+            bitmap = mask_to_bitmap(mask)
+            for row in bitmap:
+                image += str(row[::-1]) + "\n"
+            image += "\n"
+        return image
+
     # Based on checking from the rook's position - make sure to check that final pos is clear of own-colored pieces
     def rookCanMoveToPos(self, pos: Position, otherPos: Position):
         if pos.isRookAligned(otherPos):
@@ -365,6 +378,17 @@ class Board:
                 self.blackCanLongCastle = False
             elif startPos == Position("H", 8):
                 self.blackCanShortCastle = False
+        # Invalidate castles once rooks are taken
+        # If a piece is able to move to a castle's location,
+        # the castle is taken or it has already moved
+        if endPos == Position("A", 1):
+            self.whiteCanLongCastle = False
+        elif endPos == Position("H", 1):
+            self.whiteCanShortCastle = False
+        elif endPos == Position("A", 8):
+            self.blackCanLongCastle = False
+        elif endPos == Position("H", 8):
+            self.blackCanShortCastle = False
 
         # Capture
         if self.identifyChannelFromPos(endPos) != None:
