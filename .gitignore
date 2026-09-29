@@ -3,4 +3,5 @@ jupiter/*
 pyproject.toml
 __pycache__/*
 .DS_Store
-models/checkpoint_*_saturn_weights.pth
+models/**
+!models/final_saturn_weights.pth

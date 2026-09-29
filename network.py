@@ -29,8 +29,10 @@ class SaturnNetwork(nn.Module):
             nn.Linear(64 + 32, 128), nn.ReLU(), nn.Linear(128, 64), nn.ReLU()
         )
 
+        # Embedding
+        self.move_embedding = nn.Embedding(num_embeddings=n_outputs, embedding_dim=64)
+
         # Heads
-        self.label_head = nn.Linear(64, n_outputs)
         self.category_head = nn.Linear(64, 4)
         self.value_head = nn.Linear(64, 1)
 
@@ -46,4 +48,8 @@ class SaturnNetwork(nn.Module):
 
         x = self.shared(x)
 
-        return (self.label_head(x), self.category_head(x), self.value_head(x))
+        # Embedding evaluation
+        move_embeddings = self.move_embedding.weight
+        label_logits = x @ move_embeddings.T
+
+        return (label_logits, self.category_head(x), self.value_head(x))

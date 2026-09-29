@@ -93,6 +93,7 @@ for game in games:
 
         eval_target = turn["eval"]
         eval_target = torch.tensor([[eval_target]], dtype=torch.float32)
+        eval_target = torch.clamp(eval_target / 1000.0, -1.0, 1.0)
 
         # Train
         move_logits, promotion_logits, eval = model(board, params)
@@ -138,7 +139,7 @@ for game in games:
         torch.save(
             model.state_dict(), f"models/checkpoint_{game_num}_saturn_weights.pth"
         )
-        print(f"Saved model at game number {game_num}{100 * ' '}")
+        print(f"Saved model at game number {game_num}{50 * ' '}")
 
 print()  # Bypass carridge return of progress listing
 

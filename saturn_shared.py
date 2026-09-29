@@ -143,25 +143,35 @@ class Board:
         return False
 
     def render(self, board=None):
-        if board == None:
+        WHITE_SQUARE = "\033[48;5;250m"
+        BLACK_SQUARE = "\033[48;5;100m"
+        RESET = "\033[0m"
+
+        if board is None:
             board = self.state
+
         image = ""
-        channelIcons = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"]
+        channelIcons = ["♙", "♖", "♘", "♗", "♕", "♔", "♟", "♜", "♞", "♝", "♛", "♚"]
+
         for row in range(8):
-            line = ""
+            squares = []
             for col in range(8):
                 bit_index = 63 - (row * 8 + col)
-                piece = "."
+                # Background colour
+                background = WHITE_SQUARE if (row + col) % 2 == 0 else BLACK_SQUARE
+                piece = "  "
+
                 for layer, mask in enumerate(board):
                     if (mask >> bit_index) & 1:
-                        piece = channelIcons[layer]
+                        piece = channelIcons[layer] + " "
                         break
-                line += piece
-            image += f"{8-row} " + line[::-1] + "\n"
-        return image + "  abcdefgh"
+                squares.append(background + piece + RESET)
+
+            image += f"{8-row} " + "".join(reversed(squares)) + "\n"
+        return image + "   a b c d e f g h"
 
     def deepRender(self, board=None):
-        channelIcons = ["P", "R", "N", "B", "Q", "K", "p", "r", "n", "b", "q", "k"]
+        channelIcons = ["♙", "♖", "♘", "♗", "♕", "♔", "♟", "♜", "♞", "♝", "♛", "♚"]
         if board == None:
             board = self.state
         image = ""
@@ -472,7 +482,6 @@ class Board:
         checkingWhite = self.whiteMove
         if flip:
             checkingWhite = not checkingWhite
-            board.whiteMove = not board.whiteMove
 
         if checkingWhite:
             attackingPieces = board.state[:6]
@@ -511,6 +520,7 @@ class Board:
                 elif pos.rank - pawn.rank == moveDirection:
                     attackingShortlist.append(pawn)
                     if quitAtOne:
+                        print(f"pawn check: {pawn}")
                         return True
 
         # Rooks
@@ -518,6 +528,7 @@ class Board:
             if board.rookCanMoveToPos(rook, pos):
                 attackingShortlist.append(rook)
                 if quitAtOne:
+                    print(f"rook check: {rook}")
                     return True
 
         # Knights
@@ -525,6 +536,7 @@ class Board:
             if board.knightCanMoveToPos(knight, pos):
                 attackingShortlist.append(knight)
                 if quitAtOne:
+                    print(f"knight check: {knight}")
                     return True
 
         # Bishops
@@ -532,6 +544,7 @@ class Board:
             if board.bishopCanMoveToPos(bishop, pos):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
+                    print(f"bishop check: {bishop}")
                     return True
 
         # Queens
@@ -541,6 +554,7 @@ class Board:
             ):
                 attackingShortlist.append(queen)
                 if quitAtOne:
+                    print(f"queen check: {queen}")
                     return True
 
         # King
@@ -548,6 +562,7 @@ class Board:
         if board.kingCanMoveToPos(king, pos):
             attackingShortlist.append(king)
             if quitAtOne:
+                print(f"king check: {king}")
                 return True
 
         if quitAtOne:
@@ -584,6 +599,12 @@ class Board:
                 f"Cannot move to {endPos} as it is already occupied by own piece",
             )
 
+        if pieceChannel in [0, 6] and endPos.rank in [0, 7] and promoteTo == "":
+            return (
+                False,
+                f"Moving pawn to {endPos} without choosing a promotion is illegal",
+            )
+
         # PAWNS
         if pieceChannel == 0:  # White pawn
             if startPos.rank == 1 and endPos.rank == 3 and startPos.file == endPos.file:
@@ -608,7 +629,7 @@ class Board:
                         # Dissallow if position doesn't contain enemy piece and preceding rank doesnt contain enpassantable piece
                         if not (
                             self.posContainsOwnPiece(
-                                endPos, flip=False
+                                endPos, flip=True
                             )  # Check for enemy piece
                             or (
                                 self.previousMovePawnPushedFile == endPos.file
@@ -645,7 +666,7 @@ class Board:
                         # Dissallow if position doesn't contain enemy piece and preceding rank doesnt contain enpassantable piece
                         if not (
                             self.posContainsOwnPiece(
-                                endPos, anyPiece=True
+                                endPos, flip=True
                             )  # Check for enemy piece
                             or (
                                 self.previousMovePawnPushedFile == endPos.file
@@ -770,7 +791,7 @@ class Board:
             ):
                 return False, f"King cannot move to {endPos}"
             # Cannot move into check
-            if self.posAttackedBy(endPos, quitAtOne=True):
+            if self.posAttackedBy(endPos, flip=True, quitAtOne=True):
                 return False, f"Moving king to {endPos} will place it in check"
 
         # Test for revealed checks
