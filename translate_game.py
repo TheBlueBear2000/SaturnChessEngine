@@ -145,12 +145,12 @@ def translate(game: str):
                 # Full game and move details printed for diagnosis
                 # for turn in output:
                 #    print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
-                # raise Exception(
-                #    f"Game: {game}\nCannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
-                # )
                 raise Exception(
-                    f"Cannot find piece that goes to {endPos}, last move: {move}, whiteMove: {board.whiteMove}\n{board.render()}"
+                    f"Cannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
                 )
+                # raise Exception(
+                #    f"Cannot find piece that goes to {endPos}, last move: {move}, whiteMove: {board.whiteMove}\n{board.render()}"
+                # )
 
         if promotion == None:
             promotion = ""

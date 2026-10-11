@@ -1,6 +1,7 @@
-from server.engine import BaseEngine, TimeControl
+from typing import override
+from framework.base_engine import BaseEngine, TimeControl
 
-from server.SaturnChessEngine.saturn_engine import Engine
+from SaturnChessEngine.saturn_engine import Engine
 
 
 class SaturnClient(BaseEngine):

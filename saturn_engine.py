@@ -5,6 +5,7 @@ from util import mask_to_bitmap
 import json
 import torch
 from time import sleep
+from pathlib import Path
 
 
 class Engine:
@@ -12,14 +13,17 @@ class Engine:
         self.silent = silent  # Do not print if silent
         self.board = saturn_shared.Board()
 
-        with open("allowed_moves.json", "r") as file:
+        with open(Path(__file__).resolve().parent / "allowed_moves.json", "r") as file:
             self.moves_list = json.load(file)
 
         # Number of outputs is equal to the number of moves listed in allowed_moves
         self.model = SaturnNetwork(len(self.moves_list))
         self.model.load_state_dict(
             # torch.load("models/final_saturn_weights.pth")
-            torch.load("models/checkpoint_1000_saturn_weights.pth")
+            torch.load(
+                Path(__file__).resolve().parent
+                / "models/checkpoint_1000_saturn_weights.pth"
+            )
         )  # Load weights
         self.model.eval()  # Inference mode
 

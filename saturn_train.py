@@ -8,13 +8,14 @@ import json
 import torch
 import torch.nn as nn
 from datetime import datetime as time
+from pathlib import Path
 
 CE = nn.CrossEntropyLoss()
 MSE = nn.MSELoss()
 
 ### LOAD MODEL ###
 print("Loading model...")
-with open("allowed_moves.json", "r") as file:
+with open(Path(__file__).resolve().parent / "allowed_moves.json", "r") as file:
     allowed_moves = json.load(file)
 n_outputs = len(allowed_moves)  # Update to gather automatically from move loading
 model = SaturnNetwork(n_outputs)
@@ -45,12 +46,29 @@ games = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
 print("Beginning training...")
 game_num = 0
 games_failed = 0
+games_skipped = 0
 model.train()
 startTime = time.now()
 for game in games:
     game_num += 1
     # First each game must be translated into a set of board states for training
     movetext = game["movetext"]
+    variant = game["Variant"]
+    if variant.lower() in [
+        "chess960",
+        "from position",
+        "fischerandom",
+        "fisherrandom",
+        "fisher random",
+    ]:  # Skip 960 and From Position games as there is no way of finding starting pos from dataset
+        games_skipped += 1
+        continue
+
+    if variant != "Standard":
+        print(
+            f"New Varient: {variant} at game {game_num}. Associated board: {game["Board"]}"
+        )
+
     try:
         translated_game = translate_game.translate(movetext)
     except Exception as e:
@@ -144,9 +162,12 @@ for game in games:
 print()  # Bypass carridge return of progress listing
 
 print(
-    f"Training complete! Finished with final loss of {loss.item()}. {games_failed} games failed.\nSaving..."
+    f"Training complete! Finished with final loss of {loss.item()}. {games_failed} games failed, {games_skipped} games skipped.\nSaving..."
 )
 
-torch.save(model.state_dict(), "models/final_saturn_weights.pth")
+torch.save(
+    model.state_dict(),
+    Path(__file__).resolve().parent / "models/final_saturn_weights.pth",
+)
 
 print("Saved and done!")

@@ -184,10 +184,10 @@ class Board:
         return image
 
     # Based on checking from the rook's position - make sure to check that final pos is clear of own-colored pieces
-    def rookCanMoveToPos(self, pos: Position, otherPos: Position):
+    def rookCanMoveToPos(self, pos: Position, otherPos: Position, flip=False):
         if pos.isRookAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos):
+            if self.posContainsOwnPiece(otherPos, flip=flip):
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -216,19 +216,19 @@ class Board:
                 return True
         return False
 
-    def knightCanMoveToPos(self, pos: Position, otherPos: Position):
+    def knightCanMoveToPos(self, pos: Position, otherPos: Position, flip=False):
         if pos.isKnightAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos):
+            if self.posContainsOwnPiece(otherPos, flip=flip):
                 return False
             # If squares are knight aligned and the final position is not occupied by own piece, knight can move there
             return True
         return False
 
-    def bishopCanMoveToPos(self, pos: Position, otherPos: Position):
+    def bishopCanMoveToPos(self, pos: Position, otherPos: Position, flip=False):
         if pos.isBishopAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos):
+            if self.posContainsOwnPiece(otherPos, flip=flip):
                 return False
             # Final position is either free or occupied by opponent
             # Check for piece inbetween
@@ -265,10 +265,10 @@ class Board:
         return False
 
     # DOES NOT ACCOUNT FOR CHECK
-    def kingCanMoveToPos(self, pos: Position, otherPos: Position):
+    def kingCanMoveToPos(self, pos: Position, otherPos: Position, flip=False):
         if pos.isKingAligned(otherPos):
             # Check that final pos does not contain own piece
-            if self.posContainsOwnPiece(otherPos):
+            if self.posContainsOwnPiece(otherPos, flip=flip):
                 return False
             # Like knight, there is no need to check middling squares since king only moves one square at a time
             return True
@@ -458,35 +458,8 @@ class Board:
 
         attackingShortlist = []
 
-        # if checkingOwnPieces == None:
-        #     pieceChannel = board.identifyChannelFromPos(pos)
-        # else:
-        #     isWhite = not (
-        #         (checkingOwnPieces and board.whiteMove)
-        #         or not (checkingOwnPieces or board.whiteMove)
-        #     )
-        #     if flip:
-        #         isWhite = not isWhite
-
-        #     pieceChannel = 6 * int(
-        #         isWhite
-        #     )  # Will be 0 if white move (therefore finding white pieces), or 6 if black move (therefore finding black pieces)
-        # if pieceChannel < 6:
-        #     checkingWhite = True
-        #     attackingPieces = board.state[:6]
-        #     # Use the fact that there is 1 king and so location must be power of two to identify digit position in mask
-        # else:
-        #     checkingWhite = False
-        #     attackingPieces = board.state[6:]
-
-        checkingWhite = self.whiteMove
-        if flip:
-            checkingWhite = not checkingWhite
-
-        if checkingWhite:
-            attackingPieces = board.state[:6]
-        else:
-            attackingPieces = board.state[6:]
+        checkingWhite = (not board.whiteMove) if flip else board.whiteMove
+        attackingPieces = board.state[:6] if checkingWhite else board.state[6:]
 
         # Pawns
         for pawn in board.getMaskPositions(attackingPieces[0]):
@@ -520,49 +493,43 @@ class Board:
                 elif pos.rank - pawn.rank == moveDirection:
                     attackingShortlist.append(pawn)
                     if quitAtOne:
-                        print(f"pawn check: {pawn}")
                         return True
 
         # Rooks
         for rook in board.getMaskPositions(attackingPieces[1]):
-            if board.rookCanMoveToPos(rook, pos):
+            if board.rookCanMoveToPos(rook, pos, flip):
                 attackingShortlist.append(rook)
                 if quitAtOne:
-                    print(f"rook check: {rook}")
                     return True
 
         # Knights
         for knight in board.getMaskPositions(attackingPieces[2]):
-            if board.knightCanMoveToPos(knight, pos):
+            if board.knightCanMoveToPos(knight, pos, flip):
                 attackingShortlist.append(knight)
                 if quitAtOne:
-                    print(f"knight check: {knight}")
                     return True
 
         # Bishops
         for bishop in board.getMaskPositions(attackingPieces[3]):
-            if board.bishopCanMoveToPos(bishop, pos):
+            if board.bishopCanMoveToPos(bishop, pos, flip):
                 attackingShortlist.append(bishop)
                 if quitAtOne:
-                    print(f"bishop check: {bishop}")
                     return True
 
         # Queens
         for queen in board.getMaskPositions(attackingPieces[4]):
-            if board.bishopCanMoveToPos(queen, pos) or board.rookCanMoveToPos(
-                queen, pos
+            if board.bishopCanMoveToPos(queen, pos, flip) or board.rookCanMoveToPos(
+                queen, pos, flip
             ):
                 attackingShortlist.append(queen)
                 if quitAtOne:
-                    print(f"queen check: {queen}")
                     return True
 
         # King
         king = board.getMaskPositions(attackingPieces[5])[0]
-        if board.kingCanMoveToPos(king, pos):
+        if board.kingCanMoveToPos(king, pos, flip):
             attackingShortlist.append(king)
             if quitAtOne:
-                print(f"king check: {king}")
                 return True
 
         if quitAtOne:
@@ -801,10 +768,7 @@ class Board:
         )[0]
 
         attackers = self.posAttackedBy(kingPosition, board=temp_board_state, flip=True)
-
-        if self.posAttackedBy(
-            kingPosition, board=temp_board_state, quitAtOne=True, flip=True
-        ):
+        if len(attackers) > 0:
             return (
                 False,
                 f"Cannot move {startPos} to {endPos} as it leaves king at {kingPosition} in check from attacker(s) at {[str(a) for a in attackers]}. New state is:\n{self.render(temp_board_state)}",
