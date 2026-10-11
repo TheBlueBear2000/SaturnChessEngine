@@ -45,7 +45,7 @@ class Engine:
         params = board_params["castling_rights"] + board_params["scores"]
         params = torch.tensor(params, dtype=torch.float32).unsqueeze(0)
 
-        move_logits, promotion_logits, _ = self.model(board, params)
+        move_logits, promotion_logits = self.model(board, params)
         sorted_moves = torch.argsort(move_logits[0], descending=True)
 
         moves_discarded = 0

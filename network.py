@@ -34,7 +34,6 @@ class SaturnNetwork(nn.Module):
 
         # Heads
         self.category_head = nn.Linear(64, 4)
-        self.value_head = nn.Linear(64, 1)
 
     def forward(self, image, params):
 
@@ -52,4 +51,4 @@ class SaturnNetwork(nn.Module):
         move_embeddings = self.move_embedding.weight
         label_logits = x @ move_embeddings.T
 
-        return (label_logits, self.category_head(x), self.value_head(x))
+        return (label_logits, self.category_head(x))

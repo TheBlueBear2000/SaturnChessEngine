@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from datetime import datetime as time
 from pathlib import Path
+import requests
 
 CE = nn.CrossEntropyLoss()
 MSE = nn.MSELoss()
@@ -24,24 +25,21 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 ### GET DATA ###
 print("Gathering data...")
+DATASET = "Lichess/standard-chess-games"
+
+API_TOKEN = open(Path(__file__).resolve().parent / "hf_key.txt", "r").read()
+headers = {"Authorization": f"Bearer {API_TOKEN}"}
+API_URL = f"https://datasets-server.huggingface.co/size?dataset={DATASET}"
+data = requests.get(API_URL, headers=headers).json()
+DATASET_SIZE = data["size"]["dataset"]["num_rows"]
 
 LIMIT = None  # If None, whole dataset is streamed
 # Looked into getting num rows programatically, but it requires an API key and request
-TOTAL_ROWS = 931121 if LIMIT == None else LIMIT
+TOTAL_ROWS = DATASET_SIZE if LIMIT == None else LIMIT
 
-streamed_dataset = load_dataset(
-    "Lichess/tournament-chess-games", split="train", streaming=True
-)
+streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
 
 games = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
-
-# Limit to a number
-# detailed_dataset = streamed_dataset.take(500)
-
-# Convert the stream subset to a list of games (other information is irrelevant)
-# dataset = [game["movetext"] for game in list(detailed_dataset)]
-
-# print(f"Number of games gathered: {len(dataset)}")
 
 print("Beginning training...")
 game_num = 0
@@ -53,21 +51,17 @@ for game in games:
     game_num += 1
     # First each game must be translated into a set of board states for training
     movetext = game["movetext"]
-    variant = game["Variant"]
-    if variant.lower() in [
-        "chess960",
-        "from position",
-        "fischerandom",
-        "fisherrandom",
-        "fisher random",
-    ]:  # Skip 960 and From Position games as there is no way of finding starting pos from dataset
+
+    # Skip if game is low quality
+    if (
+        game["WhiteElo"] < 1500  # Make sure both ELOs are over 1500
+        or game["BlackElo"] < 1500
+        or game["Termination"] != "Normal"  # Make sure games are won now drawn
+        or game["Event"]
+        != "Rated Classical game"  # Make sure game is long enough time control
+    ):
         games_skipped += 1
         continue
-
-    if variant != "Standard":
-        print(
-            f"New Varient: {variant} at game {game_num}. Associated board: {game["Board"]}"
-        )
 
     try:
         translated_game = translate_game.translate(movetext)
@@ -109,15 +103,10 @@ for game in games:
             promotion_target = ["q", "n", "b", "r"].index(full_move[4])
             promotion = True
 
-        eval_target = turn["eval"]
-        eval_target = torch.tensor([[eval_target]], dtype=torch.float32)
-        eval_target = torch.clamp(eval_target / 1000.0, -1.0, 1.0)
-
         # Train
-        move_logits, promotion_logits, eval = model(board, params)
+        move_logits, promotion_logits = model(board, params)
 
         loss_move = CE(move_logits, move_target)
-        loss_eval = MSE(eval, eval_target)
 
         if promotion:
             promotion_target = torch.tensor([promotion_target], dtype=torch.long)
@@ -125,7 +114,7 @@ for game in games:
         else:
             loss_promotion = torch.tensor(0.0)
 
-        loss = loss_move + int(promotion) * 0.2 * loss_promotion + 0.1 * loss_eval
+        loss = loss_move + int(promotion) * 0.2 * loss_promotion
 
         loss.backward()
 

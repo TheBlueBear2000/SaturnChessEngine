@@ -5,3 +5,4 @@ __pycache__/*
 .DS_Store
 models/**
 !models/final_saturn_weights.pth
+hf_key.txt

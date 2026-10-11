@@ -5,6 +5,8 @@ import re
 PIECE_CHANNELS = [None, "R", "N", "B", "Q", "K"]
 
 
+# NO LONGER NEEDED
+# Games are no longer evaluated
 def parse_eval(eval):
     if eval.startswith("#"):
         return 100000 - int(eval[1:])
@@ -22,26 +24,19 @@ def translate(game: str):
     # Extract moves
     game_pattern = re.compile(
         r"""
-        \d+\.\s+
-        (\S+)                     # White move
-        \s+\{\s+\[%eval\s+([^\]]+)\]   # White eval
-        .*?\}
-        \s+\d+\.\.\.\s+
-        (\S+)                     # Black move
-        \s+\{\s+\[%eval\s+([^\]]+)\]   # Black eval
-        .*?\}
+            \d+\.\s+             # Move number (e.g. 1.)
+            (\S+)                # White move
+            (?:\s+(\S+))?        # Black move (optional, for the final move)
         """,
-        re.VERBOSE | re.DOTALL,
+        re.VERBOSE,
     )
 
     raw_moves = []
-    evals = []
 
-    for wm, we, bm, be in game_pattern.findall(game):
+    for wm, bm in game_pattern.findall(game):
         raw_moves.append(wm)
-        raw_moves.append(bm)
-        evals.append(parse_eval(we))
-        evals.append(parse_eval(be))
+        if bm:  # bm may be None if white wins
+            raw_moves.append(bm)
 
     # Translate moves into server LAN by simulating game
     move_pattern = re.compile(
@@ -143,14 +138,9 @@ def translate(game: str):
 
             if startPos == None:
                 # Full game and move details printed for diagnosis
-                # for turn in output:
-                #    print(f"{board.render(turn['board'])}\nMove: {turn['move']}")
                 raise Exception(
                     f"Cannot find piece that goes to {endPos} whiteMove: {board.whiteMove}\n{board.render()}\nGame: {raw_moves}\nlast move: {move}\nPiece Channel: {piece_channel}\nPiece Type Mask: {pieceTypeMask}\nAll Piece Positions: {[str(p) for p in all_piece_positions]}\nDisambiguation: '{disambiguation}'\nPositions: {[str(p) for p in positions]}\ncanSee: {[str(p) for p in canSee]}\nfiltered_positions: {[str(p) for p in filtered_positions]}\nLegal positions: {[str(p) for p in legal_positions]}"
                 )
-                # raise Exception(
-                #    f"Cannot find piece that goes to {endPos}, last move: {move}, whiteMove: {board.whiteMove}\n{board.render()}"
-                # )
 
         if promotion == None:
             promotion = ""
@@ -166,7 +156,6 @@ def translate(game: str):
                 "board": board.getBoardCopy(),
                 "params": board.getParams(),
                 "move": translatedMove,
-                "eval": evals[m_i],
             }
         )
 
