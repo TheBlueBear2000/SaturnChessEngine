@@ -33,8 +33,13 @@ API_URL = f"https://datasets-server.huggingface.co/size?dataset={DATASET}"
 data = requests.get(API_URL, headers=headers).json()
 DATASET_SIZE = data["size"]["dataset"]["num_rows"]
 
-LIMIT = None  # If None, whole dataset is streamed
+LIMIT = 1000000  # If None, whole dataset is streamed
 # Looked into getting num rows programatically, but it requires an API key and request
+if LIMIT and LIMIT > DATASET_SIZE:
+    print(
+        f"Warning: Manual limit of {LIMIT} is larger than dataset size, using full dataset size ({DATASET_SIZE}) instead."
+    )
+    LIMIT = DATASET_SIZE
 TOTAL_ROWS = DATASET_SIZE if LIMIT == None else LIMIT
 
 streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
@@ -128,21 +133,8 @@ for game in games:
             end="\r",
         )
 
-    # Save model every 10,000 games
-    # if game_num % 10000 == 0:
-    if game_num in [
-        1,
-        10,
-        100,
-        1000,
-        10000,
-        50000,
-        100000,
-        250000,
-        500000,
-        750000,
-        900000,
-    ]:
+    # Save a model every 10%
+    if game_num % (TOTAL_ROWS // 10) == 0:
         torch.save(
             model.state_dict(), f"models/checkpoint_{game_num}_saturn_weights.pth"
         )
