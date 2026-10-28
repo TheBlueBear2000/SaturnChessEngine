@@ -59,7 +59,9 @@ for game in games:
 
     # Skip if game is low quality
     if (
-        game["WhiteElo"] < 1500  # Make sure both ELOs are over 1500
+        game["WhiteElo"] == None
+        or game["BlackElo"] == None
+        or game["WhiteElo"] < 1500  # Make sure both ELOs are over 1500
         or game["BlackElo"] < 1500
         or game["Termination"] != "Normal"  # Make sure games are won now drawn
         or game["Event"]

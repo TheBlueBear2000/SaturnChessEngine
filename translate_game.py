@@ -24,9 +24,9 @@ def translate(game: str):
     # Extract moves
     game_pattern = re.compile(
         r"""
-            \d+\.\s+             # Move number (e.g. 1.)
-            (\S+)                # White move
-            (?:\s+(\S+))?        # Black move (optional, for the final move)
+            \d+\.\s+                         # Move number (e.g. 1.)
+            (\S+)                             # White move
+            (?:\s+(?!1-0\b|0-1\b|1/2-1/2\b)(\S+))?  # Black move (optional, but not a game result)
         """,
         re.VERBOSE,
     )
