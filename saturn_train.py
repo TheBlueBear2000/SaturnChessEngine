@@ -72,7 +72,7 @@ for game in games:
         translated_game = translate_game.translate(movetext)
     except Exception as e:
         games_failed += 1
-        print(f"Error occured within game {game_num}, {game['GameURL']}:\n{e}")
+        print(f"Error occured within game {game_num}, {game['Site']}:\n{e}")
         continue
 
     for turn in translated_game:
