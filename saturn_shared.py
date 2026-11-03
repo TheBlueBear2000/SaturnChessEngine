@@ -61,8 +61,8 @@ class Position:
 
 
 class Board:
-    def __init__(self, custom_layout=None):
-        if custom_layout == None:
+    def __init__(self, bitboard=None, metadata=None):
+        if bitboard == None:
             self.state = [
                 0b0000000000000000000000000000000000000000000000001111111100000000,  # White pawns
                 0b0000000000000000000000000000000000000000000000000000000010000001,  # White rooks
@@ -78,19 +78,32 @@ class Board:
                 0b0001000000000000000000000000000000000000000000000000000000000000,  # Black king
             ]
         else:
-            self.state = custom_layout  # Allow custom board setups, but ignore custom params (for now)
-        (
-            self.whiteCanLongCastle,
-            self.whiteCanShortCastle,
-            self.blackCanLongCastle,
-            self.blackCanShortCastle,
-        ) = (True, True, True, True)
+            self.state = bitboard  # Allow custom board setups, but ignore custom params (for now)
+
+        if metadata == None:
+            (
+                self.whiteCanLongCastle,
+                self.whiteCanShortCastle,
+                self.blackCanLongCastle,
+                self.blackCanShortCastle,
+            ) = (True, True, True, True)
+
+            self.previousMovePawnPushedFile = None
+
+            self.whiteMove = True
+        else:
+            (
+                self.whiteCanLongCastle,
+                self.whiteCanShortCastle,
+                self.blackCanLongCastle,
+                self.blackCanShortCastle,
+            ) = metadata["castling"]
+
+            self.previousMovePawnPushedFile = metadata["previousMovePawnPushedFile"]
+
+            self.whiteMove = metadata["whiteMove"]
 
         self.whiteScore, self.blackScore = 0, 0
-
-        self.previousMovePawnPushedFile = None
-
-        self.whiteMove = True
 
     def identifyChannelFromPos(self, pos: Position):
         mask = self.positionToMask(pos)

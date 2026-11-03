@@ -21,8 +21,7 @@ class Engine:
         self.model.load_state_dict(
             # torch.load("models/final_saturn_weights.pth")
             torch.load(
-                Path(__file__).resolve().parent
-                / "models/checkpoint_1000_saturn_weights.pth"
+                Path(__file__).resolve().parent / "models/final_saturn_weights.pth"
             )
         )  # Load weights
         self.model.eval()  # Inference mode

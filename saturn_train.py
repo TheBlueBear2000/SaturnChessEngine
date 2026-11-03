@@ -1,6 +1,6 @@
 print("Starting...")
 from datasets import load_dataset
-import translate_game as translate_game
+import translator as translator
 from network import SaturnNetwork
 from util import mask_to_bitmap
 
@@ -10,6 +10,7 @@ import torch.nn as nn
 from datetime import datetime as time
 from pathlib import Path
 import requests
+import duckdb
 
 CE = nn.CrossEntropyLoss()
 MSE = nn.MSELoss()
@@ -25,7 +26,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 ### GET DATA ###
 print("Gathering data...")
-DATASET = "Lichess/standard-chess-games"
+DATASET = "Lichess/chess-position-evaluations"
 
 API_TOKEN = open(Path(__file__).resolve().parent / "hf_key.txt", "r").read()
 headers = {"Authorization": f"Bearer {API_TOKEN}"}
@@ -34,50 +35,30 @@ data = requests.get(API_URL, headers=headers).json()
 DATASET_SIZE = data["size"]["dataset"]["num_rows"]
 
 LIMIT = 1000000  # If None, whole dataset is streamed
-# Looked into getting num rows programatically, but it requires an API key and request
-if LIMIT and LIMIT > DATASET_SIZE:
-    print(
-        f"Warning: Manual limit of {LIMIT} is larger than dataset size, using full dataset size ({DATASET_SIZE}) instead."
-    )
-    LIMIT = DATASET_SIZE
 TOTAL_ROWS = DATASET_SIZE if LIMIT == None else LIMIT
 
 streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
-
-games = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
+positions = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
 
 print("Beginning training...")
-game_num = 0
-games_failed = 0
-games_skipped = 0
+position_num = 0
+positions_failed = 0
+positions_skipped = 0
 model.train()
 startTime = time.now()
-for game in games:
-    game_num += 1
-    # First each game must be translated into a set of board states for training
-    movetext = game["movetext"]
+for position in positions:
+    position_num += 1
 
-    # Skip if game is low quality
-    if (
-        game["WhiteElo"] == None
-        or game["BlackElo"] == None
-        or game["WhiteElo"] < 1500  # Make sure both ELOs are over 1500
-        or game["BlackElo"] < 1500
-        or game["Termination"] != "Normal"  # Make sure games are won now drawn
-        or game["Event"]
-        != "Rated Classical game"  # Make sure game is long enough time control
-    ):
-        games_skipped += 1
-        continue
+    # First each position must be translated into a set of board states for training
+    # try:
+    #    states = translator.extract_states(position["fen"], position["line"])
+    # except Exception as e:
+    #    positions_failed += 1
+    #    print(f"Error occured within position {position_num}, {position['fen']}:\n{e}")
+    #    break
+    states = translator.extract_states(position["fen"], position["line"])
 
-    try:
-        translated_game = translate_game.translate(movetext)
-    except Exception as e:
-        games_failed += 1
-        print(f"Error occured within game {game_num}, {game['Site']}:\n{e}")
-        continue
-
-    for turn in translated_game:
+    for turn in states:
         optimizer.zero_grad()  # Reset gradients
 
         board_state = turn["board"]
@@ -88,8 +69,7 @@ for game in games:
         board = torch.tensor(board, dtype=torch.float32)
         board = board.unsqueeze(0)
 
-        board_params = turn["params"]
-        params = board_params["castling_rights"] + board_params["scores"]
+        params = turn["params"]["castling_rights"] + turn["params"]["scores"]
         params = torch.tensor(params, dtype=torch.float32).unsqueeze(0)
 
         # Get the move's index as its target value
@@ -98,8 +78,8 @@ for game in games:
         try:
             move_target = allowed_moves.index(move)  # Remove promotion before scanning
         except:
-            # If move fails, ignore rest of game
-            print(f"\nMove {move} is not in list ??")
+            # If move fails, ignore rest of position
+            print(f"\nERROR: Move {move} is not in allowed moves list")
             break
 
         move_target = torch.tensor([move_target], dtype=torch.long)
@@ -127,25 +107,25 @@ for game in games:
 
         optimizer.step()
 
-    if game_num % 20 == 0:
-        td = ((time.now() - startTime) / game_num) * (TOTAL_ROWS - game_num)
+    if position_num % 20 == 0:
+        td = ((time.now() - startTime) / position_num) * (TOTAL_ROWS - position_num)
 
         print(
-            f"Game number {game_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}, Current loss: {loss.item()}{20*' '}",
+            f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}, Current loss: {loss.item()}{20*' '}",
             end="\r",
         )
 
     # Save a model every 10%
-    if game_num % (TOTAL_ROWS // 10) == 0:
+    if position_num % (TOTAL_ROWS // 10) == 0:
         torch.save(
-            model.state_dict(), f"models/checkpoint_{game_num}_saturn_weights.pth"
+            model.state_dict(), f"models/checkpoint_{position_num}_saturn_weights.pth"
         )
-        print(f"Saved model at game number {game_num}{50 * ' '}")
+        print(f"Saved model at position number {position_num}{50 * ' '}")
 
 print()  # Bypass carridge return of progress listing
 
 print(
-    f"Training complete! Finished with final loss of {loss.item()}. {games_failed} games failed, {games_skipped} games skipped.\nSaving..."
+    f"Training complete! Finished with final loss of {loss.item()}. {positions_failed} positions failed, {positions_skipped} positions skipped.\nSaving..."
 )
 
 torch.save(
