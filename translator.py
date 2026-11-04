@@ -16,7 +16,13 @@ def extract_states(fen: str, line: str):
             }
         )
         # Update board after recording previous position, so that each move corresponds to previous board state
-        board.update(move.upper())
+
+        try:
+            board.update(move.upper())
+        except Exception as e:
+            print(board.render(), "\n", fen, line, "\n", e)
+
+    return output
 
 
 def extract_fen(fen):
@@ -35,8 +41,6 @@ def extract_fen(fen):
     )
 
     match = pattern.match(fen.strip())
-
-    print("fen: ", fen)
 
     if not match:
         raise ValueError("Invalid FEN string")
@@ -78,9 +82,11 @@ def translate_fen(fen):
                 x += int(char)
             else:
                 x += 1
-                mask = 1 << (x + (8 * y))
-                print(char)
-                bitboard[PIECES.index(char)] = bitboard[PIECES.index(char)] & mask
+                mask = 1 << ((x - 1) + (8 * (7 - y)))
+                # print(
+                #    f"adding {char} to coordinate ({x}, {y}). Mask is {mask}. bitboard index is {PIECES.index(char)}"
+                # )
+                bitboard[PIECES.index(char)] |= mask
 
     castling = (
         "Q" in info["castling"],
@@ -96,6 +102,8 @@ def translate_fen(fen):
         previousMovePawnPushedFile = saturn_shared.File(
             ord(info["en_passant"][0].lower()) - 97
         )
+
+    # print(f"Bitboard: {bitboard}")
 
     return {
         "bitboard": bitboard,

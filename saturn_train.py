@@ -51,11 +51,11 @@ for position in positions:
 
     # First each position must be translated into a set of board states for training
     # try:
-    #    states = translator.extract_states(position["fen"], position["line"])
+    #     states = translator.extract_states(position["fen"], position["line"])
     # except Exception as e:
-    #    positions_failed += 1
-    #    print(f"Error occured within position {position_num}, {position['fen']}:\n{e}")
-    #    break
+    #     positions_failed += 1
+    #     print(f"Error occured within position {position_num}, {position['fen']}:\n{e}")
+    #     break
     states = translator.extract_states(position["fen"], position["line"])
 
     for turn in states:
@@ -87,7 +87,7 @@ for position in positions:
         # Extract promotion data from move
         promotion = False
         if len(full_move) == 5:
-            promotion_target = ["q", "n", "b", "r"].index(full_move[4])
+            promotion_target = ["q", "n", "b", "r"].index(full_move[4].lower())
             promotion = True
 
         # Train

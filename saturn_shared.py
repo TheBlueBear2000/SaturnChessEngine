@@ -373,20 +373,37 @@ class Board:
             backupBoard = self.getBoardCopy()
             backupParams = self.getParams()
 
+        castled = False
         # Castling - move rooks first
         if pieceChannel == 5:  # White Castle
-            if self.whiteCanLongCastle and endPos.file == File.C:
+            if self.whiteCanLongCastle and (
+                endPos.file == File.C or endPos.file == File.A
+            ):
+                castled = True
                 self.movePiece(Position("A", 1), Position("D", 1), 1)
-            if self.whiteCanShortCastle and endPos.file == File.G:
+                self.movePiece(Position("E", 1), Position("C", 1), pieceChannel)
+            if self.whiteCanShortCastle and (
+                endPos.file == File.G or endPos.file == File.H
+            ):
+                castled = True
                 self.movePiece(Position("H", 1), Position("F", 1), 1)
+                self.movePiece(Position("E", 1), Position("G", 1), pieceChannel)
                 # Invalidate castle after king has moved
             self.whiteCanLongCastle, self.whiteCanShortCastle = False, False
 
         elif pieceChannel == 11:  # Black Castle
-            if self.blackCanLongCastle and endPos.file == File.C:
+            if self.blackCanLongCastle and (
+                endPos.file == File.C or endPos.file == File.A
+            ):
+                castled = True
                 self.movePiece(Position("A", 8), Position("D", 8), 7)
-            if self.blackCanShortCastle and endPos.file == File.G:
+                self.movePiece(Position("E", 8), Position("C", 8), pieceChannel)
+            if self.blackCanShortCastle and (
+                endPos.file == File.G or endPos.file == File.H
+            ):
+                castled = True
                 self.movePiece(Position("H", 8), Position("F", 8), 7)
+                self.movePiece(Position("E", 8), Position("G", 8), pieceChannel)
                 # Invalidate castle after king has moved
             self.blackCanLongCastle, self.blackCanShortCastle = False, False
 
@@ -426,7 +443,8 @@ class Board:
             self.takePiece(takePos)
 
         # Standard Move
-        self.movePiece(startPos, endPos, pieceChannel)
+        if not castled:  # Castling moves king already
+            self.movePiece(startPos, endPos, pieceChannel)
 
         # Promotion
         if pieceChannel in [0, 6] and promoteTo != "":
@@ -695,8 +713,13 @@ class Board:
                         (  # White long castle
                             pieceChannel == 5
                             and self.whiteCanLongCastle
+                            and (  # Cannot castle through check
+                                not self.posAttackedBy(Position("D", 1), quitAtOne=True)
+                            )
                             and startPos == Position("E", 1)
-                            and endPos == Position("C", 1)
+                            and (
+                                endPos == Position("C", 1) or endPos == Position("A", 1)
+                            )
                             and (
                                 not self.posContainsOwnPiece(
                                     Position("B", 1), anyPiece=True
@@ -716,8 +739,13 @@ class Board:
                         or (  # White short castle
                             pieceChannel == 5
                             and self.whiteCanShortCastle
+                            and (  # Cannot castle through check
+                                not self.posAttackedBy(Position("F", 1), quitAtOne=True)
+                            )
                             and startPos == Position("E", 1)
-                            and endPos == Position("G", 1)
+                            and (
+                                endPos == Position("G", 1) or endPos == Position("H", 1)
+                            )
                             and (
                                 not self.posContainsOwnPiece(
                                     Position("F", 1), anyPiece=True
@@ -732,8 +760,13 @@ class Board:
                         or (  # Black long castle
                             pieceChannel == 11
                             and self.blackCanLongCastle
+                            and (  # Cannot castle through check
+                                not self.posAttackedBy(Position("D", 8), quitAtOne=True)
+                            )
                             and startPos == Position("E", 8)
-                            and endPos == Position("C", 8)
+                            and (
+                                endPos == Position("C", 8) or endPos == Position("A", 8)
+                            )
                             and (
                                 not self.posContainsOwnPiece(
                                     Position("B", 8), anyPiece=True
@@ -753,8 +786,13 @@ class Board:
                         or (  # Black short castle
                             pieceChannel == 11
                             and self.blackCanShortCastle
+                            and (  # Cannot castle through check
+                                not self.posAttackedBy(Position("F", 8), quitAtOne=True)
+                            )
                             and startPos == Position("E", 8)
-                            and endPos == Position("G", 8)
+                            and (
+                                endPos == Position("G", 8) or endPos == Position("H", 8)
+                            )
                             and (
                                 not self.posContainsOwnPiece(
                                     Position("F", 8), anyPiece=True
