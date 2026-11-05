@@ -1,54 +1,98 @@
+import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-BITBOARD_CHANNELS = 12
+
+class ResidualBlock(nn.Module):
+    def __init__(self, channels=64):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(channels)
+
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = out + residual
+
+        return self.relu(out)
 
 
 class SaturnNetwork(nn.Module):
-    def __init__(self, n_outputs):
+
+    def __init__(self, n_outputs, n_residual_blocks=4):
         super().__init__()
 
         # Image encoder
-        self.conv = nn.Sequential(
-            nn.Conv2d(12, 16, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(16, 32, 3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+        self.stem = nn.Sequential(
+            nn.Conv2d(12, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
         )
 
-        self.image_fc = nn.Linear(32 * 2 * 2, 64)
+        # Residual blocks
+        self.residual_blocks = nn.Sequential(
+            *[ResidualBlock(64) for _ in range(n_residual_blocks)]
+        )
+
+        # Board projection
+        self.board_projection = nn.Sequential(
+            nn.Conv2d(64, 32, kernel_size=1), nn.ReLU(inplace=True)
+        )
+
+        # Image representation
+        self.image_fc = nn.Sequential(nn.Linear(32 * 8 * 8, 256), nn.ReLU(inplace=True))
 
         # Extra parameters
-        self.param_fc = nn.Sequential(nn.Linear(6, 32), nn.ReLU())
+        self.param_fc = nn.Sequential(nn.Linear(6, 64), nn.ReLU(inplace=True))
 
         # Shared features
         self.shared = nn.Sequential(
-            nn.Linear(64 + 32, 128), nn.ReLU(), nn.Linear(128, 64), nn.ReLU()
+            nn.Linear(256 + 64, 512),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
         )
 
-        # Embedding
-        self.move_embedding = nn.Embedding(num_embeddings=n_outputs, embedding_dim=64)
+        # Move embedding
+        self.move_embedding = nn.Embedding(num_embeddings=n_outputs, embedding_dim=256)
 
-        # Heads
-        self.category_head = nn.Linear(64, 4)
+        # Prediction heads
+        self.category_head = nn.Linear(256, 4)
 
     def forward(self, image, params):
+        # Process chessboard
+        x = self.stem(image)
+        x = self.residual_blocks(x)
+        x = self.board_projection(x)
 
-        x = self.conv(image)
         x = torch.flatten(x, 1)
-        x = F.relu(self.image_fc(x))
+        x = self.image_fc(x)
 
+        # Process extra parameters
         p = self.param_fc(params)
 
+        # Combine representations
         x = torch.cat([x, p], dim=1)
 
+        # Shared feature extraction
         x = self.shared(x)
 
-        # Embedding evaluation
+        # Move prediction
         move_embeddings = self.move_embedding.weight
-        label_logits = x @ move_embeddings.T
 
-        return (label_logits, self.category_head(x))
+        label_logits = (x @ move_embeddings.T) / math.sqrt(256)
+        category_logits = self.category_head(x)
+
+        return label_logits, category_logits
