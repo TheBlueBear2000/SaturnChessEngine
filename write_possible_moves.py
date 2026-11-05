@@ -1,4 +1,4 @@
-from server.SaturnChessEngine.saturn_shared import File, Position
+from saturn_shared import File, Position
 
 from json import dumps
 
