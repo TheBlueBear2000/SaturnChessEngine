@@ -10,7 +10,6 @@ import torch.nn as nn
 from datetime import datetime as time
 from pathlib import Path
 import requests
-import duckdb
 
 CE = nn.CrossEntropyLoss()
 MSE = nn.MSELoss()
