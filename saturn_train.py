@@ -10,6 +10,7 @@ import torch.nn as nn
 from datetime import datetime as time
 from pathlib import Path
 import requests
+import traceback
 
 CE = nn.CrossEntropyLoss()
 MSE = nn.MSELoss()
@@ -40,6 +41,7 @@ streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
 positions = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
 
 print("Beginning training...")
+training_start_time = time.now()
 position_num = 0
 positions_failed = 0
 positions_skipped = 0
@@ -49,13 +51,14 @@ for position in positions:
     position_num += 1
 
     # First each position must be translated into a set of board states for training
-    # try:
-    #     states = translator.extract_states(position["fen"], position["line"])
-    # except Exception as e:
-    #     positions_failed += 1
-    #     print(f"Error occured within position {position_num}, {position['fen']}:\n{e}")
-    #     break
-    states = translator.extract_states(position["fen"], position["line"])
+    try:
+        states = translator.extract_states(position["fen"], position["line"])
+    except Exception as e:
+        positions_failed += 1
+        print(
+            f"Error occured within position {position_num}, {position['fen']}:\n{e}\nFull Traceback:\n{traceback.format_exc()}"
+        )
+        break
 
     for turn in states:
         optimizer.zero_grad()  # Reset gradients
@@ -106,16 +109,18 @@ for position in positions:
 
         optimizer.step()
 
-    if position_num % 20 == 0:
+    if position_num % 0 == 50:
         td = ((time.now() - startTime) / position_num) * (TOTAL_ROWS - position_num)
-
+        progress_string = f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}, Current loss: {loss.item()}{20*' '}"
         print(
-            f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}, Current loss: {loss.item()}{20*' '}",
+            progress_string,
             end="\r",
         )
+        with open("progress.txt", "w") as f:
+            f.write(progress_string)
 
-    # Save a model every 10%
-    if position_num % (TOTAL_ROWS // 10) == 0:
+    # Save a model every 4%
+    if position_num % (TOTAL_ROWS // 25) == 0:
         torch.save(
             model.state_dict(), f"models/checkpoint_{position_num}_saturn_weights.pth"
         )
@@ -123,8 +128,11 @@ for position in positions:
 
 print()  # Bypass carridge return of progress listing
 
+time_taken = time.now() - training_start_time
 print(
-    f"Training complete! Finished with final loss of {loss.item()}. {positions_failed} positions failed, {positions_skipped} positions skipped.\nSaving..."
+    f"""Training complete! Finished with final loss of {loss.item()}. {positions_failed} positions failed, {positions_skipped} positions skipped.\n
+    Total time taken: {time_taken.days:02d}d, {time_taken.seconds//3600:02d}:{(time_taken.seconds//60)%60:02d}:{time_taken.seconds%60:02d}\n
+    Saving..."""
 )
 
 torch.save(
