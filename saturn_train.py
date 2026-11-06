@@ -109,7 +109,7 @@ for position in positions:
 
         optimizer.step()
 
-    if position_num % 0 == 50:
+    if position_num % 50 == 0:
         td = ((time.now() - startTime) / position_num) * (TOTAL_ROWS - position_num)
         progress_string = f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}, Current loss: {loss.item()}{20*' '}"
         print(
