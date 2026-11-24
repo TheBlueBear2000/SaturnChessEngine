@@ -32,6 +32,18 @@ class Engine:
             print(f"\nSATURN: Updated by playing move: {move}")
             print(self.board.render())
 
+    def buildParams(self):
+        p = self.board.getParams()
+        castling = [int(c) for c in p["castling_rights"]]
+
+        raw_ep = p["previousMovePawnPushedFile"]
+        ep_file = 8 if raw_ep in (None, -1, 8) else raw_ep.value
+        ep_onehot = [
+            1.0 if ep_file == i else 0.0 for i in range(8)
+        ]  # 8 = none -> all zeros
+
+        return castling + [int(self.board.whiteMove)] + ep_onehot
+
     def decideMove(self):
         board = []
         # Translate bitboard numbers into 3D bitmap
@@ -40,9 +52,7 @@ class Engine:
         board = torch.tensor(board, dtype=torch.float32)
         board = board.unsqueeze(0)
 
-        board_params = self.board.getParams()
-        params = board_params["castling_rights"] + board_params["scores"]
-        params = torch.tensor(params, dtype=torch.float32).unsqueeze(0)
+        params = torch.tensor(self.buildParams(), dtype=torch.float32).unsqueeze(0)
 
         move_logits, promotion_logits = self.model(board, params)
         sorted_moves = torch.argsort(move_logits[0], descending=True)
@@ -56,8 +66,8 @@ class Engine:
                 # Add promotion if needed
                 startPos = saturn_shared.Position(move[0], move[1])
                 channel_at_pos = self.board.identifyChannelFromPos(startPos)
-                if (channel_at_pos == 0 and move[3] == 8) or (
-                    channel_at_pos == 6 and move[3] == 1
+                if (channel_at_pos == 0 and move[3] == "8") or (
+                    channel_at_pos == 6 and move[3] == "1"
                 ):
                     # Select promotion
                     move += ["q", "n", "b", "r"][

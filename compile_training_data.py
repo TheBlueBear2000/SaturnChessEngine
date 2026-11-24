@@ -95,48 +95,55 @@ def pack_turn(turn):
     return struct.pack(RECORD_FORMAT, *bitboards, meta)
 
 
-### GET DATA ###
-print("Gathering data...")
-DATASET = "Lichess/chess-position-evaluations"
+def main():
+    ### GET DATA ###
+    print("Gathering data...")
+    DATASET = "Lichess/chess-position-evaluations"
 
-API_TOKEN = open(Path(__file__).resolve().parent / "hf_key.txt", "r").read()
-headers = {"Authorization": f"Bearer {API_TOKEN}"}
-API_URL = f"https://datasets-server.huggingface.co/size?dataset={DATASET}"
-data = requests.get(API_URL, headers=headers).json()
-DATASET_SIZE = data["size"]["dataset"]["num_rows"]
+    API_TOKEN = open(Path(__file__).resolve().parent / "hf_key.txt", "r").read()
+    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    API_URL = f"https://datasets-server.huggingface.co/size?dataset={DATASET}"
+    data = requests.get(API_URL, headers=headers).json()
+    DATASET_SIZE = data["size"]["dataset"]["num_rows"]
 
-TOTAL_ROWS = DATASET_SIZE if LIMIT == None else LIMIT
+    TOTAL_ROWS = DATASET_SIZE if LIMIT == None else LIMIT
 
-streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
-positions = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
+    streamed_dataset = load_dataset(DATASET, split="train", streaming=True)
+    positions = streamed_dataset.take(LIMIT) if LIMIT is not None else streamed_dataset
 
-with open("training_positions.bin", "wb") as file:
-    position_num = 0
-    startTime = time.now()
+    with open("training_positions.bin", "wb") as file:
+        position_num = 0
+        startTime = time.now()
 
-    for position in positions:
-        position_num += 1
+        for position in positions:
+            position_num += 1
 
-        # First each position must be translated into a set of board states for training
-        try:
-            states = translator.extract_states(position["fen"], position["line"])
-        except Exception as e:
-            positions_failed += 1
-            print(
-                f"Error occured within position {position_num}, {position['fen']}:\n{e}\nFull Traceback:\n{traceback.format_exc()}"
-            )
-            break
+            # First each position must be translated into a set of board states for training
+            try:
+                states = translator.extract_states(position["fen"], position["line"])
+            except Exception as e:
+                positions_failed += 1
+                print(
+                    f"Error occured within position {position_num}, {position['fen']}:\n{e}\nFull Traceback:\n{traceback.format_exc()}"
+                )
+                break
 
-        for turn in states:
-            data = pack_turn(turn)
-            file.write(data)
+            for turn in states:
+                data = pack_turn(turn)
+                file.write(data)
 
-        if position_num % FEEDBACK_STEPS == 0:
-            td = ((time.now() - startTime) / position_num) * (TOTAL_ROWS - position_num)
-            progress_string = f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}"
-            print(
-                progress_string,
-                end="\r",
-            )
+            if position_num % FEEDBACK_STEPS == 0:
+                td = ((time.now() - startTime) / position_num) * (
+                    TOTAL_ROWS - position_num
+                )
+                progress_string = f"Position number {position_num}, ETA: {td.days:02d}d, {td.seconds//3600:02d}:{(td.seconds//60)%60:02d}:{td.seconds%60:02d}"
+                print(
+                    progress_string,
+                    end="\r",
+                )
 
-print("Saved and done!")
+    print("Saved and done!")
+
+
+if __name__ == "__main__":
+    main()
