@@ -7,12 +7,14 @@ def extract_states(fen: str, line: str):
     output = []
     info = translate_fen(fen)
     board = saturn_shared.Board(info["bitboard"], info["metadata"])
+    whiteMove = True
     for move in line.split():
         output.append(
             {
                 "board": board.getBoardCopy(),
                 "params": board.getParams(),
                 "move": move.upper(),
+                "whiteMove": whiteMove,
             }
         )
         # Update board after recording previous position, so that each move corresponds to previous board state
@@ -21,6 +23,7 @@ def extract_states(fen: str, line: str):
             board.update(move.upper())
         except Exception as e:
             print(board.render(), "\n", fen, line, "\n", e)
+        whiteMove = not whiteMove
 
     return output
 

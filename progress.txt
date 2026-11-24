@@ -1,0 +1,1 @@
+Epoch 1/1, step 4100/305359, ETA: 00d, 11:17:05, Current loss: 6.6998                    

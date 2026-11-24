@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels=64):
+    def __init__(self, channels):
         super().__init__()
 
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
@@ -18,81 +18,120 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         residual = x
 
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = out + residual
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.bn2(self.conv2(x))
 
-        return self.relu(out)
+        x = x + residual
+        return self.relu(x)
 
 
 class SaturnNetwork(nn.Module):
-
-    def __init__(self, n_outputs, n_residual_blocks=4):
+    def __init__(
+        self,
+        n_outputs,
+        n_params=13,  # 4 castling + 1 turn + 8 en-passant file one-hot
+        d_model=128,
+        n_heads=4,
+        n_layers=4,
+        dropout=0.1,
+    ):
         super().__init__()
 
-        # Image encoder
-        self.stem = nn.Sequential(
+        # CNN feature extractor
+        self.cnn = nn.Sequential(
             nn.Conv2d(12, 64, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
+            ResidualBlock(64),
+            ResidualBlock(64),
+            ResidualBlock(64),
         )
 
-        # Residual blocks
-        self.residual_blocks = nn.Sequential(
-            *[ResidualBlock(64) for _ in range(n_residual_blocks)]
-        )
-
-        # Board projection
+        # Project CNN features into transformer embedding dimensions
         self.board_projection = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=1), nn.ReLU(inplace=True)
+            nn.Conv2d(64, d_model, kernel_size=1), nn.ReLU(inplace=True)
         )
 
-        # Image representation
-        self.image_fc = nn.Sequential(nn.Linear(32 * 8 * 8, 256), nn.ReLU(inplace=True))
+        # Positional embeddings for the 64 chessboard squares
+        self.position_embedding = nn.Parameter(torch.randn(1, 64, d_model) * 0.02)
 
-        # Extra parameters
-        self.param_fc = nn.Sequential(nn.Linear(6, 64), nn.ReLU(inplace=True))
-
-        # Shared features
-        self.shared = nn.Sequential(
-            nn.Linear(256 + 64, 512),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
-            nn.Linear(512, 256),
-            nn.ReLU(inplace=True),
+        # Embed the additional game parameters (castling, turn, en-passant file)
+        self.param_fc = nn.Sequential(
+            nn.Linear(n_params, d_model), nn.ReLU(inplace=True)
         )
 
-        # Move embedding
-        self.move_embedding = nn.Embedding(num_embeddings=n_outputs, embedding_dim=256)
+        # CLS token used to aggregate information from the board
+        self.cls_token = nn.Parameter(torch.randn(1, 1, d_model) * 0.02)
 
-        # Prediction heads
-        self.category_head = nn.Linear(256, 4)
+        # Transformer encoder
+        self.transformer_layers = nn.ModuleList(
+            [
+                nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=n_heads,
+                    dim_feedforward=d_model * 4,
+                    dropout=dropout,
+                    activation="gelu",
+                    batch_first=True,
+                    norm_first=True,
+                )
+                for _ in range(n_layers)
+            ]
+        )
+
+        self.transformer_norm = nn.LayerNorm(d_model)
+
+        # Move prediction head
+        self.move_embedding = nn.Embedding(
+            num_embeddings=n_outputs, embedding_dim=d_model
+        )
+
+        # Promotion prediction head (q, n, b, r)
+        self.category_head = nn.Linear(d_model, 4)
 
     def forward(self, image, params):
-        # Process chessboard
-        x = self.stem(image)
-        x = self.residual_blocks(x)
+
+        batch_size = image.shape[0]
+
+        # 1. Extract spatial features using the CNN
+        x = self.cnn(image)
+
+        # 2. Project CNN features into transformer dimensions
         x = self.board_projection(x)
 
-        x = torch.flatten(x, 1)
-        x = self.image_fc(x)
+        # 3. Convert the board into 64 square tokens
+        x = x.flatten(2).transpose(1, 2)
 
-        # Process extra parameters
+        # 4. Add positional information
+        x = x + self.position_embedding
+
+        # 5. Embed additional game parameters
         p = self.param_fc(params)
 
-        # Combine representations
-        x = torch.cat([x, p], dim=1)
+        # 6. Create CLS token and incorporate game parameters
+        cls = self.cls_token.expand(batch_size, -1, -1)
+        cls = cls + p.unsqueeze(1)
 
-        # Shared feature extraction
-        x = self.shared(x)
+        # 7. Prepend CLS token to the board tokens
+        x = torch.cat([cls, x], dim=1)
 
-        # Move prediction
+        # 8. Process tokens through transformer layers
+        for layer in self.transformer_layers:
+            x = layer(x)
+
+        x = self.transformer_norm(x)
+
+        # 9. Extract the CLS token
+        position = x[:, 0, :]
+
+        # 10. Predict move logits
         move_embeddings = self.move_embedding.weight
 
-        label_logits = (x @ move_embeddings.T) / math.sqrt(256)
-        category_logits = self.category_head(x)
+        move_logits = (position @ move_embeddings.T) / math.sqrt(
+            move_embeddings.shape[-1]
+        )
 
-        return label_logits, category_logits
+        # 11. Predict promotion logits
+        category_logits = self.category_head(position)
+
+        return move_logits, category_logits
